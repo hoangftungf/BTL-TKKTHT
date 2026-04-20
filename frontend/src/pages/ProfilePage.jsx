@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import userService from '../services/userService';
+import AddressForm from '../components/address/AddressForm';
 import { UserIcon, MapPinIcon, HeartIcon, BellIcon, PencilIcon, TrashIcon, PlusIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
@@ -15,16 +16,6 @@ const ProfilePage = () => {
   // Address form state
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [editingAddress, setEditingAddress] = useState(null);
-  const [addressForm, setAddressForm] = useState({
-    recipient_name: '',
-    phone: '',
-    province: '',
-    district: '',
-    ward: '',
-    street_address: '',
-    address_type: 'home',
-    is_default: false,
-  });
 
   // Profile form state
   const [profileForm, setProfileForm] = useState({
@@ -77,51 +68,24 @@ const ProfilePage = () => {
   };
 
   const resetAddressForm = () => {
-    setAddressForm({
-      recipient_name: '',
-      phone: '',
-      province: '',
-      district: '',
-      ward: '',
-      street_address: '',
-      address_type: 'home',
-      is_default: false,
-    });
     setEditingAddress(null);
     setShowAddressForm(false);
   };
 
   const handleEditAddress = (address) => {
     setEditingAddress(address);
-    setAddressForm({
-      recipient_name: address.recipient_name,
-      phone: address.phone,
-      province: address.province,
-      district: address.district,
-      ward: address.ward,
-      street_address: address.street_address,
-      address_type: address.address_type,
-      is_default: address.is_default,
-    });
     setShowAddressForm(true);
   };
 
-  const handleAddressSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!addressForm.recipient_name || !addressForm.phone || !addressForm.street_address) {
-      toast.error('Vui lòng điền đầy đủ thông tin');
-      return;
-    }
-
+  const handleAddressSubmit = async (formData) => {
     setSaving(true);
     try {
       if (editingAddress) {
-        const updated = await userService.updateAddress(editingAddress.id, addressForm);
+        const updated = await userService.updateAddress(editingAddress.id, formData);
         setAddresses(addresses.map(a => a.id === editingAddress.id ? updated : a));
         toast.success('Cập nhật địa chỉ thành công');
       } else {
-        const created = await userService.addAddress(addressForm);
+        const created = await userService.addAddress(formData);
         setAddresses([...addresses, created]);
         toast.success('Thêm địa chỉ thành công');
       }
@@ -270,7 +234,7 @@ const ProfilePage = () => {
                   {!showAddressForm && (
                     <button
                       onClick={() => {
-                        resetAddressForm();
+                        setEditingAddress(null);
                         setShowAddressForm(true);
                       }}
                       className="btn-primary text-sm flex items-center"
@@ -287,101 +251,13 @@ const ProfilePage = () => {
                     <h3 className="font-medium text-gray-900 mb-4">
                       {editingAddress ? 'Sửa địa chỉ' : 'Thêm địa chỉ mới'}
                     </h3>
-                    <form onSubmit={handleAddressSubmit}>
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Họ và tên *</label>
-                          <input
-                            type="text"
-                            value={addressForm.recipient_name}
-                            onChange={(e) => setAddressForm({ ...addressForm, recipient_name: e.target.value })}
-                            className="input"
-                            placeholder="Nguyễn Văn A"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại *</label>
-                          <input
-                            type="tel"
-                            value={addressForm.phone}
-                            onChange={(e) => setAddressForm({ ...addressForm, phone: e.target.value })}
-                            className="input"
-                            placeholder="0912345678"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Tỉnh/Thành phố *</label>
-                          <input
-                            type="text"
-                            value={addressForm.province}
-                            onChange={(e) => setAddressForm({ ...addressForm, province: e.target.value })}
-                            className="input"
-                            placeholder="Hà Nội"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Quận/Huyện *</label>
-                          <input
-                            type="text"
-                            value={addressForm.district}
-                            onChange={(e) => setAddressForm({ ...addressForm, district: e.target.value })}
-                            className="input"
-                            placeholder="Cầu Giấy"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Phường/Xã *</label>
-                          <input
-                            type="text"
-                            value={addressForm.ward}
-                            onChange={(e) => setAddressForm({ ...addressForm, ward: e.target.value })}
-                            className="input"
-                            placeholder="Dịch Vọng"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Loại địa chỉ</label>
-                          <select
-                            value={addressForm.address_type}
-                            onChange={(e) => setAddressForm({ ...addressForm, address_type: e.target.value })}
-                            className="input"
-                          >
-                            <option value="home">Nhà riêng</option>
-                            <option value="office">Văn phòng</option>
-                            <option value="other">Khác</option>
-                          </select>
-                        </div>
-                        <div className="md:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ chi tiết *</label>
-                          <input
-                            type="text"
-                            value={addressForm.street_address}
-                            onChange={(e) => setAddressForm({ ...addressForm, street_address: e.target.value })}
-                            className="input"
-                            placeholder="Số nhà, tên đường..."
-                          />
-                        </div>
-                        <div className="md:col-span-2">
-                          <label className="flex items-center">
-                            <input
-                              type="checkbox"
-                              checked={addressForm.is_default}
-                              onChange={(e) => setAddressForm({ ...addressForm, is_default: e.target.checked })}
-                              className="mr-2"
-                            />
-                            <span className="text-sm text-gray-700">Đặt làm địa chỉ mặc định</span>
-                          </label>
-                        </div>
-                      </div>
-                      <div className="flex justify-end space-x-3 mt-4">
-                        <button type="button" onClick={resetAddressForm} className="btn-secondary">
-                          Hủy
-                        </button>
-                        <button type="submit" disabled={saving} className="btn-primary">
-                          {saving ? 'Đang lưu...' : (editingAddress ? 'Cập nhật' : 'Thêm địa chỉ')}
-                        </button>
-                      </div>
-                    </form>
+                    <AddressForm
+                      initialData={editingAddress || {}}
+                      onSubmit={handleAddressSubmit}
+                      onCancel={resetAddressForm}
+                      saving={saving}
+                      submitText={editingAddress ? 'Cập nhật' : 'Thêm địa chỉ'}
+                    />
                   </div>
                 )}
 
