@@ -4,13 +4,20 @@ import { useDispatch, useSelector } from 'react-redux';
 import { createOrder } from '../store/slices/orderSlice';
 import { resetCart } from '../store/slices/cartSlice';
 import { formatPrice } from '../utils/format';
+import userService from '../services/userService';
 import toast from 'react-hot-toast';
+import { PlusIcon, MapPinIcon, CheckIcon } from '@heroicons/react/24/outline';
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { items, totalAmount } = useSelector((state) => state.cart);
   const { loading } = useSelector((state) => state.order);
+
+  const [addresses, setAddresses] = useState([]);
+  const [selectedAddressId, setSelectedAddressId] = useState(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [loadingAddresses, setLoadingAddresses] = useState(true);
 
   const [formData, setFormData] = useState({
     recipient_name: '',
@@ -23,21 +30,105 @@ const CheckoutPage = () => {
     note: '',
   });
 
+  const [newAddress, setNewAddress] = useState({
+    recipient_name: '',
+    phone: '',
+    province: '',
+    district: '',
+    ward: '',
+    street_address: '',
+    address_type: 'home',
+    is_default: false,
+  });
+
+  // Load addresses on mount
+  useEffect(() => {
+    loadAddresses();
+  }, []);
+
   useEffect(() => {
     if (!items || items.length === 0) {
       navigate('/cart');
     }
   }, [items, navigate]);
 
+  const loadAddresses = async () => {
+    try {
+      setLoadingAddresses(true);
+      const data = await userService.getAddresses();
+      setAddresses(data);
+
+      // Auto-select default address
+      const defaultAddr = data.find(addr => addr.is_default);
+      if (defaultAddr) {
+        selectAddress(defaultAddr);
+      } else if (data.length > 0) {
+        selectAddress(data[0]);
+      }
+    } catch (error) {
+      console.error('Error loading addresses:', error);
+    } finally {
+      setLoadingAddresses(false);
+    }
+  };
+
+  const selectAddress = (address) => {
+    setSelectedAddressId(address.id);
+    setFormData(prev => ({
+      ...prev,
+      recipient_name: address.recipient_name,
+      recipient_phone: address.phone,
+      shipping_address: address.street_address,
+      shipping_province: address.province,
+      shipping_district: address.district,
+      shipping_ward: address.ward,
+    }));
+    setShowAddForm(false);
+  };
+
+  const handleAddAddress = async (e) => {
+    e.preventDefault();
+
+    if (!newAddress.recipient_name || !newAddress.phone || !newAddress.street_address) {
+      toast.error('Vui lòng điền đầy đủ thông tin');
+      return;
+    }
+
+    try {
+      const created = await userService.addAddress(newAddress);
+      toast.success('Thêm địa chỉ thành công');
+      setAddresses([...addresses, created]);
+      selectAddress(created);
+      setShowAddForm(false);
+      setNewAddress({
+        recipient_name: '',
+        phone: '',
+        province: '',
+        district: '',
+        ward: '',
+        street_address: '',
+        address_type: 'home',
+        is_default: false,
+      });
+    } catch (error) {
+      toast.error('Không thể thêm địa chỉ');
+    }
+  };
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleNewAddressChange = (e) => {
+    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    setNewAddress({ ...newAddress, [e.target.name]: value });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!formData.recipient_name || !formData.recipient_phone || !formData.shipping_address) {
-      toast.error('Vui lòng điền đầy đủ thông tin');
+      toast.error('Vui lòng chọn hoặc thêm địa chỉ giao hàng');
       return;
     }
 
@@ -62,89 +153,213 @@ const CheckoutPage = () => {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Shipping Info */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Address Selection */}
             <div className="card p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Thông tin giao hàng</h2>
-
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Họ và tên *</label>
-                  <input
-                    type="text"
-                    name="recipient_name"
-                    value={formData.recipient_name}
-                    onChange={handleChange}
-                    className="input"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại *</label>
-                  <input
-                    type="tel"
-                    name="recipient_phone"
-                    value={formData.recipient_phone}
-                    onChange={handleChange}
-                    className="input"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tỉnh/Thành phố *</label>
-                  <input
-                    type="text"
-                    name="shipping_province"
-                    value={formData.shipping_province}
-                    onChange={handleChange}
-                    className="input"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Quận/Huyện *</label>
-                  <input
-                    type="text"
-                    name="shipping_district"
-                    value={formData.shipping_district}
-                    onChange={handleChange}
-                    className="input"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phường/Xã *</label>
-                  <input
-                    type="text"
-                    name="shipping_ward"
-                    value={formData.shipping_ward}
-                    onChange={handleChange}
-                    className="input"
-                    required
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ chi tiết *</label>
-                  <input
-                    type="text"
-                    name="shipping_address"
-                    value={formData.shipping_address}
-                    onChange={handleChange}
-                    className="input"
-                    placeholder="Số nhà, tên đường..."
-                    required
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Ghi chú</label>
-                  <textarea
-                    name="note"
-                    value={formData.note}
-                    onChange={handleChange}
-                    className="input"
-                    rows="3"
-                    placeholder="Ghi chú cho đơn hàng..."
-                  />
-                </div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <MapPinIcon className="w-5 h-5 mr-2 text-primary-600" />
+                  Địa chỉ giao hàng
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowAddForm(!showAddForm)}
+                  className="flex items-center text-primary-600 hover:text-primary-700 text-sm font-medium"
+                >
+                  <PlusIcon className="w-4 h-4 mr-1" />
+                  Thêm địa chỉ mới
+                </button>
               </div>
+
+              {loadingAddresses ? (
+                <div className="text-center py-8 text-gray-500">Đang tải địa chỉ...</div>
+              ) : (
+                <>
+                  {/* Saved Addresses */}
+                  {addresses.length > 0 && (
+                    <div className="space-y-3 mb-4">
+                      {addresses.map((address) => (
+                        <div
+                          key={address.id}
+                          onClick={() => selectAddress(address)}
+                          className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                            selectedAddressId === address.id
+                              ? 'border-primary-500 bg-primary-50'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-grow">
+                              <div className="flex items-center mb-1">
+                                <span className="font-medium text-gray-900">{address.recipient_name}</span>
+                                <span className="mx-2 text-gray-300">|</span>
+                                <span className="text-gray-600">{address.phone}</span>
+                                {address.is_default && (
+                                  <span className="ml-2 px-2 py-0.5 bg-primary-100 text-primary-700 text-xs rounded">
+                                    Mặc định
+                                  </span>
+                                )}
+                                <span className="ml-2 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded capitalize">
+                                  {address.address_type === 'home' ? 'Nhà riêng' : address.address_type === 'office' ? 'Văn phòng' : 'Khác'}
+                                </span>
+                              </div>
+                              <p className="text-gray-600 text-sm">
+                                {address.street_address}, {address.ward}, {address.district}, {address.province}
+                              </p>
+                            </div>
+                            {selectedAddressId === address.id && (
+                              <CheckIcon className="w-6 h-6 text-primary-600 flex-shrink-0" />
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* No addresses message */}
+                  {addresses.length === 0 && !showAddForm && (
+                    <div className="text-center py-8 bg-gray-50 rounded-lg">
+                      <MapPinIcon className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-gray-500 mb-3">Bạn chưa có địa chỉ nào</p>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddForm(true)}
+                        className="btn-primary"
+                      >
+                        Thêm địa chỉ đầu tiên
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Add New Address Form */}
+                  {showAddForm && (
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-gray-50">
+                      <h3 className="font-medium text-gray-900 mb-4">Thêm địa chỉ mới</h3>
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Họ và tên *</label>
+                          <input
+                            type="text"
+                            name="recipient_name"
+                            value={newAddress.recipient_name}
+                            onChange={handleNewAddressChange}
+                            className="input"
+                            placeholder="Nguyễn Văn A"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại *</label>
+                          <input
+                            type="tel"
+                            name="phone"
+                            value={newAddress.phone}
+                            onChange={handleNewAddressChange}
+                            className="input"
+                            placeholder="0912345678"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Tỉnh/Thành phố *</label>
+                          <input
+                            type="text"
+                            name="province"
+                            value={newAddress.province}
+                            onChange={handleNewAddressChange}
+                            className="input"
+                            placeholder="Hà Nội"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Quận/Huyện *</label>
+                          <input
+                            type="text"
+                            name="district"
+                            value={newAddress.district}
+                            onChange={handleNewAddressChange}
+                            className="input"
+                            placeholder="Cầu Giấy"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Phường/Xã *</label>
+                          <input
+                            type="text"
+                            name="ward"
+                            value={newAddress.ward}
+                            onChange={handleNewAddressChange}
+                            className="input"
+                            placeholder="Dịch Vọng"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Loại địa chỉ</label>
+                          <select
+                            name="address_type"
+                            value={newAddress.address_type}
+                            onChange={handleNewAddressChange}
+                            className="input"
+                          >
+                            <option value="home">Nhà riêng</option>
+                            <option value="office">Văn phòng</option>
+                            <option value="other">Khác</option>
+                          </select>
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Địa chỉ chi tiết *</label>
+                          <input
+                            type="text"
+                            name="street_address"
+                            value={newAddress.street_address}
+                            onChange={handleNewAddressChange}
+                            className="input"
+                            placeholder="Số nhà, tên đường..."
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              name="is_default"
+                              checked={newAddress.is_default}
+                              onChange={handleNewAddressChange}
+                              className="mr-2"
+                            />
+                            <span className="text-sm text-gray-700">Đặt làm địa chỉ mặc định</span>
+                          </label>
+                        </div>
+                      </div>
+                      <div className="flex justify-end space-x-3 mt-4">
+                        <button
+                          type="button"
+                          onClick={() => setShowAddForm(false)}
+                          className="btn-secondary"
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAddAddress}
+                          className="btn-primary"
+                        >
+                          Lưu địa chỉ
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Note */}
+            <div className="card p-6">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Ghi chú cho đơn hàng</label>
+              <textarea
+                name="note"
+                value={formData.note}
+                onChange={handleChange}
+                className="input"
+                rows="2"
+                placeholder="Ví dụ: Giao hàng giờ hành chính..."
+              />
             </div>
 
             {/* Payment Method */}
@@ -217,9 +432,19 @@ const CheckoutPage = () => {
                 <span className="text-red-600">{formatPrice(total)}</span>
               </div>
 
-              <button type="submit" disabled={loading} className="btn-primary w-full">
+              <button
+                type="submit"
+                disabled={loading || !selectedAddressId}
+                className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 {loading ? 'Đang xử lý...' : 'Đặt hàng'}
               </button>
+
+              {!selectedAddressId && (
+                <p className="text-sm text-red-500 text-center mt-2">
+                  Vui lòng chọn địa chỉ giao hàng
+                </p>
+              )}
             </div>
           </div>
         </div>
