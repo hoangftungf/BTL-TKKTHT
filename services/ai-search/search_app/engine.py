@@ -234,11 +234,18 @@ class SearchEngine:
         from .models import ProductIndex
 
         name = product_data.get('name', '')
-        description = product_data.get('description', '')
+        description = product_data.get('description', '') or product_data.get('short_description', '')
 
         # Extract keywords
         text = f"{name} {description}"
         keywords = ' '.join(self.nlp.extract_keywords(text))
+
+        # Handle category - can be dict with 'name' or string or have separate 'category_name'
+        category = product_data.get('category', '')
+        if isinstance(category, dict):
+            category = category.get('name', '')
+        else:
+            category = product_data.get('category_name', str(category))
 
         ProductIndex.objects.update_or_create(
             product_id=product_data['id'],
@@ -246,11 +253,11 @@ class SearchEngine:
                 'name': name,
                 'name_normalized': self.nlp.normalize(name),
                 'description': description,
-                'category': product_data.get('category', {}).get('name', ''),
+                'category': category,
                 'brand': product_data.get('brand', ''),
-                'price': product_data.get('price', 0),
+                'price': float(product_data.get('price', 0) or 0),
                 'keywords': keywords,
-                'popularity_score': product_data.get('sold_count', 0) * 0.5 + product_data.get('view_count', 0) * 0.1
+                'popularity_score': float(product_data.get('sold_count', 0) or 0) * 0.5 + float(product_data.get('view_count', 0) or 0) * 0.1
             }
         )
 
