@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker --version)",
+      "Bash(docker-compose --version)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker-compose ps:*)",
+      "Bash(docker-compose logs:*)",
+      "Bash(docker-compose exec:*)",
+      "Bash(docker-compose restart:*)",
+      "Bash(curl -s http://localhost:8000/api/products/categories/)",
+      "Bash(curl -s \"http://localhost:8000/api/products/?category=06efe572-8a98-4ba5-ba92-00243ef542b0\")",
+      "Bash(curl -s http://localhost:8000/api/products/)",
+      "Bash(curl -s http://localhost:8000/health/)",
+      "Bash(docker exec:*)",
+      "Bash(curl:*)",
+      "Bash(for svc:*)",
+      "Bash(do echo:*)",
+      "Bash(done)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc2MzA5Nzg5LCJpYXQiOjE3NzYzMDc5ODksImp0aSI6IjUwMDkwZGI2YzczMjRmYmU4M2JkMDE1MjU2YmU2ODc5IiwidXNlcl9pZCI6ImIwZjEwMTNkLTJlMTEtNDI2OC1iNjYxLTg5MGExMjgyZjE5NyJ9.Gk1_h_hdM8btzVIArLGCLH4okMyFbylzjdaoZ7ZHhUI\")",
+      "Bash(docker-compose down:*)",
+      "Bash(docker run:*)",
+      "Bash(docker-compose build:*)",
+      "Bash(for dir:*)",
+      "Read(//c/BTL-TKKTHT/**)",
+      "Bash(docker ps:*)",
+      "Bash(docker cp:*)",
+      "Bash(git remote:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

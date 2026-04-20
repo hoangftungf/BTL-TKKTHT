@@ -1,0 +1,14 @@
+Django>=4.2,<5.0
+djangorestframework>=3.14.0
+django-cors-headers>=4.3.0
+psycopg2-binary>=2.9.9
+dj-database-url>=2.1.0
+redis>=5.0.0
+httpx>=0.25.0
+gunicorn>=21.2.0
+ollama>=0.1.0
+
+# RAG Support
+numpy>=1.26.0
+scikit-learn>=1.4.0
+faiss-cpu>=1.7.4

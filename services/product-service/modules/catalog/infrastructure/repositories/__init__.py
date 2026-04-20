@@ -1,0 +1,2 @@
+from .product_repository_impl import DjangoProductRepository
+from .category_repository_impl import DjangoCategoryRepository

@@ -1,0 +1,76 @@
+{
+  "users": [
+    {"id": "11111111-1111-1111-1111-111111111111", "name": "Nguyen Van A", "email": "a@test.com", "type": "tech_lover"},
+    {"id": "22222222-2222-2222-2222-222222222222", "name": "Tran Thi B", "email": "b@test.com", "type": "fashionista"},
+    {"id": "33333333-3333-3333-3333-333333333333", "name": "Le Van C", "email": "c@test.com", "type": "gamer"},
+    {"id": "44444444-4444-4444-4444-444444444444", "name": "Pham Thi D", "email": "d@test.com", "type": "home_maker"},
+    {"id": "55555555-5555-5555-5555-555555555555", "name": "Hoang Van E", "email": "e@test.com", "type": "sports_fan"},
+    {"id": "66666666-6666-6666-6666-666666666666", "name": "Nguyen Thi F", "email": "f@test.com", "type": "bookworm"},
+    {"id": "77777777-7777-7777-7777-777777777777", "name": "Tran Van G", "email": "g@test.com", "type": "tech_lover"},
+    {"id": "88888888-8888-8888-8888-888888888888", "name": "Le Thi H", "email": "h@test.com", "type": "fashionista"},
+    {"id": "99999999-9999-9999-9999-999999999999", "name": "Pham Van I", "email": "i@test.com", "type": "gamer"},
+    {"id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "name": "Hoang Thi K", "email": "k@test.com", "type": "home_maker"}
+  ],
+  "products": {
+    "electronics": [
+      {"id": "e1111111-1111-1111-1111-111111111111", "name": "iPhone 15 Pro Max", "description": "Điện thoại Apple iPhone 15 Pro Max 256GB, chip A17 Pro, camera 48MP, màn hình Super Retina XDR 6.7 inch", "price": 34990000, "brand": "Apple", "category": "Điện thoại"},
+      {"id": "e2222222-2222-2222-2222-222222222222", "name": "Samsung Galaxy S24 Ultra", "description": "Samsung Galaxy S24 Ultra 256GB, chip Snapdragon 8 Gen 3, camera 200MP, màn hình Dynamic AMOLED 6.8 inch, S-Pen", "price": 31990000, "brand": "Samsung", "category": "Điện thoại"},
+      {"id": "e3333333-3333-3333-3333-333333333333", "name": "MacBook Pro M3 14 inch", "description": "Laptop Apple MacBook Pro 14 inch chip M3 Pro, RAM 18GB, SSD 512GB, màn hình Liquid Retina XDR", "price": 49990000, "brand": "Apple", "category": "Laptop"},
+      {"id": "e4444444-4444-4444-4444-444444444444", "name": "Dell XPS 15", "description": "Laptop Dell XPS 15, Intel Core i7 Gen 13, RAM 16GB, SSD 512GB, màn hình OLED 3.5K 15.6 inch", "price": 35990000, "brand": "Dell", "category": "Laptop"},
+      {"id": "e5555555-5555-5555-5555-555555555555", "name": "iPad Pro 12.9 M2", "description": "Máy tính bảng Apple iPad Pro 12.9 inch chip M2, WiFi 256GB, màn hình Liquid Retina XDR", "price": 28990000, "brand": "Apple", "category": "Máy tính bảng"},
+      {"id": "e6666666-6666-6666-6666-666666666666", "name": "AirPods Pro 2", "description": "Tai nghe Apple AirPods Pro 2 với chip H2, chống ồn chủ động, âm thanh không gian", "price": 6490000, "brand": "Apple", "category": "Tai nghe"},
+      {"id": "e7777777-7777-7777-7777-777777777777", "name": "Sony WH-1000XM5", "description": "Tai nghe chụp tai Sony WH-1000XM5 chống ồn cao cấp, pin 30 giờ, kết nối đa điểm", "price": 8490000, "brand": "Sony", "category": "Tai nghe"},
+      {"id": "e8888888-8888-8888-8888-888888888888", "name": "Apple Watch Ultra 2", "description": "Đồng hồ thông minh Apple Watch Ultra 2 GPS + Cellular, vỏ titanium 49mm, chống nước 100m", "price": 21990000, "brand": "Apple", "category": "Đồng hồ thông minh"}
+    ],
+    "gaming": [
+      {"id": "g1111111-1111-1111-1111-111111111111", "name": "PlayStation 5", "description": "Máy chơi game Sony PlayStation 5 Standard Edition, ổ đĩa Blu-ray 4K, SSD 825GB", "price": 14990000, "brand": "Sony", "category": "Máy chơi game"},
+      {"id": "g2222222-2222-2222-2222-222222222222", "name": "Xbox Series X", "description": "Máy chơi game Microsoft Xbox Series X 1TB, hỗ trợ 4K 120fps, Quick Resume", "price": 13990000, "brand": "Microsoft", "category": "Máy chơi game"},
+      {"id": "g3333333-3333-3333-3333-333333333333", "name": "Nintendo Switch OLED", "description": "Máy chơi game Nintendo Switch OLED Model, màn hình OLED 7 inch, Joy-Con", "price": 8990000, "brand": "Nintendo", "category": "Máy chơi game"},
+      {"id": "g4444444-4444-4444-4444-444444444444", "name": "Gaming Chair Razer Iskur", "description": "Ghế gaming Razer Iskur với hỗ trợ lưng công thái học, tay vịn 4D, da PVC cao cấp", "price": 12990000, "brand": "Razer", "category": "Ghế gaming"},
+      {"id": "g5555555-5555-5555-5555-555555555555", "name": "Logitech G Pro X Superlight", "description": "Chuột gaming không dây Logitech G Pro X Superlight, sensor HERO 25K, 63g siêu nhẹ", "price": 3290000, "brand": "Logitech", "category": "Chuột gaming"},
+      {"id": "g6666666-6666-6666-6666-666666666666", "name": "Razer DeathAdder V3", "description": "Chuột gaming Razer DeathAdder V3, sensor Focus Pro 30K, công tắc quang học Gen 3", "price": 1990000, "brand": "Razer", "category": "Chuột gaming"},
+      {"id": "g7777777-7777-7777-7777-777777777777", "name": "ASUS ROG Swift PG27AQN", "description": "Màn hình gaming ASUS ROG Swift 27 inch 2K 360Hz, IPS, G-SYNC, HDR600", "price": 15990000, "brand": "ASUS", "category": "Màn hình gaming"}
+    ],
+    "fashion": [
+      {"id": "f1111111-1111-1111-1111-111111111111", "name": "Áo thun Uniqlo U", "description": "Áo thun cổ tròn Uniqlo U, chất liệu cotton 100%, form oversize, nhiều màu", "price": 399000, "brand": "Uniqlo", "category": "Áo thun"},
+      {"id": "f2222222-2222-2222-2222-222222222222", "name": "Quần jeans Levis 501 Original", "description": "Quần jeans Levis 501 Original Fit, dáng straight, màu xanh medium wash, 100% cotton", "price": 1890000, "brand": "Levis", "category": "Quần jeans"},
+      {"id": "f3333333-3333-3333-3333-333333333333", "name": "Giày Nike Air Max 90", "description": "Giày thể thao Nike Air Max 90, đệm Air Max visible, đế cao su bền bỉ", "price": 3990000, "brand": "Nike", "category": "Giày thể thao"},
+      {"id": "f4444444-4444-4444-4444-444444444444", "name": "Túi xách Coach Tabby", "description": "Túi xách Coach Tabby Shoulder Bag 26, da bò cao cấp, khóa Coach C, dây đeo có thể tháo rời", "price": 8990000, "brand": "Coach", "category": "Túi xách"},
+      {"id": "f5555555-5555-5555-5555-555555555555", "name": "Đồng hồ Casio G-Shock GA-2100", "description": "Đồng hồ Casio G-Shock GA-2100-1A1, vỏ carbon, chống sốc, chống nước 200m", "price": 2490000, "brand": "Casio", "category": "Đồng hồ"},
+      {"id": "f6666666-6666-6666-6666-666666666666", "name": "Kính mát Ray-Ban Aviator", "description": "Kính mát Ray-Ban Aviator Classic RB3025, gọng kim loại vàng, tròng xanh G-15", "price": 3990000, "brand": "Ray-Ban", "category": "Kính mát"},
+      {"id": "f7777777-7777-7777-7777-777777777777", "name": "Váy đầm Zara Midi", "description": "Váy đầm Zara Midi, chất liệu satin mềm mại, cổ V, tay dài, màu đen thanh lịch", "price": 1290000, "brand": "Zara", "category": "Váy đầm"},
+      {"id": "f8888888-8888-8888-8888-888888888888", "name": "Áo khoác H&M Bomber", "description": "Áo khoác H&M Bomber Jacket, chất liệu nylon, lót lông cừu, khóa kéo YKK", "price": 899000, "brand": "H&M", "category": "Áo khoác"}
+    ],
+    "home": [
+      {"id": "h1111111-1111-1111-1111-111111111111", "name": "Nồi chiên không dầu Philips HD9270", "description": "Nồi chiên không dầu Philips HD9270 dung tích 6.2L, công nghệ Rapid Air, 7 chương trình nấu", "price": 3490000, "brand": "Philips", "category": "Đồ gia dụng"},
+      {"id": "h2222222-2222-2222-2222-222222222222", "name": "Máy hút bụi Dyson V15 Detect", "description": "Máy hút bụi không dây Dyson V15 Detect, công nghệ laser phát hiện bụi, pin 60 phút", "price": 18990000, "brand": "Dyson", "category": "Đồ gia dụng"},
+      {"id": "h3333333-3333-3333-3333-333333333333", "name": "Nồi cơm điện Cuckoo CRP-P1009S", "description": "Nồi cơm điện áp suất Cuckoo 1.8L, lòng nồi chống dính, 13 chương trình nấu tự động", "price": 4990000, "brand": "Cuckoo", "category": "Đồ gia dụng"},
+      {"id": "h4444444-4444-4444-4444-444444444444", "name": "Máy lọc không khí Xiaomi 4 Pro", "description": "Máy lọc không khí Xiaomi Smart Air Purifier 4 Pro, CADR 500m3/h, màn hình OLED, kết nối WiFi", "price": 2990000, "brand": "Xiaomi", "category": "Đồ gia dụng"},
+      {"id": "h5555555-5555-5555-5555-555555555555", "name": "Bàn làm việc IKEA BEKANT", "description": "Bàn làm việc IKEA BEKANT 160x80cm, mặt bàn gỗ veneer, chân thép sơn tĩnh điện", "price": 3490000, "brand": "IKEA", "category": "Nội thất"},
+      {"id": "h6666666-6666-6666-6666-666666666666", "name": "Ghế công thái học Ergohuman", "description": "Ghế công thái học Ergohuman Pro, lưng lưới mesh, tựa đầu điều chỉnh, tay vịn 4D", "price": 5990000, "brand": "ErgoChair", "category": "Nội thất"}
+    ],
+    "sports": [
+      {"id": "s1111111-1111-1111-1111-111111111111", "name": "Giày chạy bộ Adidas Ultraboost 23", "description": "Giày chạy bộ Adidas Ultraboost 23, đệm Boost, upper Primeknit, đế Continental", "price": 2990000, "brand": "Adidas", "category": "Giày thể thao"},
+      {"id": "s2222222-2222-2222-2222-222222222222", "name": "Vợt cầu lông Yonex Astrox 99", "description": "Vợt cầu lông Yonex Astrox 99 Pro, khung Namd, trọng lượng 83g, độ căng 20-28 lbs", "price": 1890000, "brand": "Yonex", "category": "Dụng cụ thể thao"},
+      {"id": "s3333333-3333-3333-3333-333333333333", "name": "Bóng đá Nike Flight", "description": "Bóng đá Nike Flight chính hãng, công nghệ Aerowsculpt, size 5, FIFA Quality Pro", "price": 890000, "brand": "Nike", "category": "Dụng cụ thể thao"},
+      {"id": "s4444444-4444-4444-4444-444444444444", "name": "Máy chạy bộ Elip Runner Pro", "description": "Máy chạy bộ điện Elip Runner Pro, mặt thảm rộng 50cm, tốc độ 18km/h, 15 chương trình", "price": 15990000, "brand": "Elip", "category": "Thiết bị tập gym"},
+      {"id": "s5555555-5555-5555-5555-555555555555", "name": "Tạ tay cao su 10kg", "description": "Bộ tạ tay cao su 10kg, lõi gang đúc nguyên khối, vỏ cao su chống trơn trượt", "price": 590000, "brand": "Generic", "category": "Thiết bị tập gym"},
+      {"id": "s6666666-6666-6666-6666-666666666666", "name": "Thảm yoga TPE cao cấp", "description": "Thảm yoga TPE 2 lớp dày 6mm, chống trượt, chống thấm nước, kèm túi đựng", "price": 390000, "brand": "Generic", "category": "Dụng cụ yoga"}
+    ],
+    "books": [
+      {"id": "b1111111-1111-1111-1111-111111111111", "name": "Đắc Nhân Tâm", "description": "Sách Đắc Nhân Tâm - Dale Carnegie, nghệ thuật thu phục lòng người, bản dịch tiếng Việt", "price": 86000, "brand": "NXB Tổng hợp", "category": "Sách"},
+      {"id": "b2222222-2222-2222-2222-222222222222", "name": "Nhà Giả Kim", "description": "Sách Nhà Giả Kim - Paulo Coelho, tiểu thuyết về hành trình theo đuổi ước mơ", "price": 79000, "brand": "NXB Hội Nhà Văn", "category": "Sách"},
+      {"id": "b3333333-3333-3333-3333-333333333333", "name": "Tư Duy Nhanh Và Chậm", "description": "Sách Tư Duy Nhanh Và Chậm - Daniel Kahneman, về hai hệ thống tư duy của con người", "price": 199000, "brand": "NXB Thế Giới", "category": "Sách"},
+      {"id": "b4444444-4444-4444-4444-444444444444", "name": "Atomic Habits", "description": "Sách Atomic Habits - James Clear, phương pháp xây dựng thói quen tốt, bỏ thói quen xấu", "price": 159000, "brand": "NXB Lao Động", "category": "Sách"},
+      {"id": "b5555555-5555-5555-5555-555555555555", "name": "Sapiens - Lược Sử Loài Người", "description": "Sách Sapiens - Yuval Noah Harari, lịch sử tiến hóa của loài người từ thời tiền sử", "price": 209000, "brand": "NXB Tri Thức", "category": "Sách"}
+    ]
+  },
+  "user_preferences": {
+    "tech_lover": ["electronics", "gaming"],
+    "fashionista": ["fashion"],
+    "gamer": ["gaming", "electronics"],
+    "home_maker": ["home", "electronics"],
+    "sports_fan": ["sports", "fashion"],
+    "bookworm": ["books", "home"]
+  }
+}

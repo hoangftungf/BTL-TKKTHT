@@ -1,0 +1,30 @@
+Django>=5.0,<6.0
+djangorestframework>=3.14.0
+django-cors-headers>=4.3.0
+psycopg2-binary>=2.9.9
+redis>=5.0.0
+django-redis>=5.4.0
+gunicorn>=21.2.0
+httpx>=0.26.0
+python-dotenv>=1.0.0
+dj-database-url>=2.1.0
+PyJWT>=2.8.0
+
+# Data Processing
+numpy>=1.24.0,<2.0.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+scipy>=1.11.0
+joblib>=1.3.0
+
+# LSTM Model (PyTorch) - CPU only for smaller image
+torch --index-url https://download.pytorch.org/whl/cpu
+
+# Knowledge Graph (Neo4j)
+neo4j>=5.0.0
+
+# RAG - Vector Database (using numpy fallback if faiss fails)
+# faiss-cpu>=1.7.0
+
+# LLM Integration
+ollama>=0.1.0
