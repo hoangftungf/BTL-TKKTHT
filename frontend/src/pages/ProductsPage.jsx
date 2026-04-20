@@ -1,19 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchProducts, fetchCategories, setFilters } from '../store/slices/productSlice';
+import { fetchProducts, fetchCategories } from '../store/slices/productSlice';
 import ProductGrid from '../components/product/ProductGrid';
 import { FunnelIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 const ProductsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [showFilters, setShowFilters] = useState(false);
+  const [priceFrom, setPriceFrom] = useState('');
+  const [priceTo, setPriceTo] = useState('');
   const dispatch = useDispatch();
 
-  const { products, categories, pagination, filters, loading } = useSelector((state) => state.product);
+  const { products, categories, pagination, loading } = useSelector((state) => state.product);
 
   const currentCategory = searchParams.get('category') || '';
   const currentOrdering = searchParams.get('ordering') || '-created_at';
+  const currentPage = searchParams.get('page') || '1';
+  const minPrice = searchParams.get('min_price') || '';
+  const maxPrice = searchParams.get('max_price') || '';
 
   useEffect(() => {
     dispatch(fetchCategories());
@@ -21,19 +26,22 @@ const ProductsPage = () => {
 
   useEffect(() => {
     const params = {
-      category: currentCategory || undefined,
       ordering: currentOrdering,
-      page: searchParams.get('page') || 1,
-      ...filters,
+      page: currentPage,
     };
-    dispatch(fetchProducts(params));
-  }, [dispatch, searchParams, filters, currentCategory, currentOrdering]);
 
-  const handleFilterChange = (key, value) => {
-    dispatch(setFilters({ [key]: value }));
-    searchParams.set(key, value);
-    setSearchParams(searchParams);
-  };
+    if (currentCategory) {
+      params.category = currentCategory;
+    }
+    if (minPrice) {
+      params.min_price = minPrice;
+    }
+    if (maxPrice) {
+      params.max_price = maxPrice;
+    }
+
+    dispatch(fetchProducts(params));
+  }, [dispatch, currentCategory, currentOrdering, currentPage, minPrice, maxPrice]);
 
   const handleCategoryChange = (categoryId) => {
     if (categoryId) {
@@ -107,21 +115,36 @@ const ProductsPage = () => {
             {/* Price Range */}
             <div className="mb-6">
               <h4 className="font-medium text-gray-700 mb-2">Khoảng giá</h4>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 mb-2">
                 <input
                   type="number"
                   placeholder="Từ"
+                  value={priceFrom}
                   className="input text-sm"
-                  onChange={(e) => handleFilterChange('min_price', e.target.value)}
+                  onChange={(e) => setPriceFrom(e.target.value)}
                 />
                 <span>-</span>
                 <input
                   type="number"
                   placeholder="Đến"
+                  value={priceTo}
                   className="input text-sm"
-                  onChange={(e) => handleFilterChange('max_price', e.target.value)}
+                  onChange={(e) => setPriceTo(e.target.value)}
                 />
               </div>
+              <button
+                onClick={() => {
+                  if (priceFrom) searchParams.set('min_price', priceFrom);
+                  else searchParams.delete('min_price');
+                  if (priceTo) searchParams.set('max_price', priceTo);
+                  else searchParams.delete('max_price');
+                  searchParams.delete('page');
+                  setSearchParams(searchParams);
+                }}
+                className="w-full btn-primary text-sm py-2"
+              >
+                Áp dụng
+              </button>
             </div>
           </div>
         </aside>
