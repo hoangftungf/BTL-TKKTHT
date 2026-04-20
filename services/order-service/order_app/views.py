@@ -45,7 +45,7 @@ class OrderListCreateView(APIView):
             return Response({'error': 'Giỏ hàng trống'}, status=status.HTTP_400_BAD_REQUEST)
 
         data = serializer.validated_data
-        subtotal = cart_data.get('total_amount', 0)
+        subtotal = float(cart_data.get('total_amount', 0) or 0)
         shipping_fee = 30000
 
         order = Order.objects.create(

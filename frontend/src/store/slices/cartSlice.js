@@ -71,37 +71,49 @@ const cartSlice = createSlice({
       })
       .addCase(fetchCart.fulfilled, (state, action) => {
         state.loading = false;
-        state.items = action.payload.items || [];
-        state.totalItems = action.payload.total_items || 0;
-        state.totalAmount = action.payload.total_amount || 0;
+        state.items = (action.payload.items || []).map(item => ({
+          ...item,
+          price: Number(item.price) || 0,
+          subtotal: Number(item.subtotal) || 0,
+          quantity: Number(item.quantity) || 0,
+        }));
+        state.totalItems = Number(action.payload.total_items) || 0;
+        state.totalAmount = Number(action.payload.total_amount) || 0;
       })
       .addCase(fetchCart.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
       .addCase(addToCart.fulfilled, (state, action) => {
-        const existingItem = state.items.find(item => item.id === action.payload.id);
+        const newItem = {
+          ...action.payload,
+          price: Number(action.payload.price) || 0,
+          subtotal: Number(action.payload.subtotal) || 0,
+          quantity: Number(action.payload.quantity) || 0,
+        };
+        const existingItem = state.items.find(item => item.id === newItem.id);
         if (existingItem) {
-          existingItem.quantity = action.payload.quantity;
+          existingItem.quantity = newItem.quantity;
+          existingItem.subtotal = newItem.subtotal;
         } else {
-          state.items.push(action.payload);
+          state.items.push(newItem);
         }
-        state.totalItems = state.items.reduce((sum, item) => sum + item.quantity, 0);
-        state.totalAmount = state.items.reduce((sum, item) => sum + item.subtotal, 0);
+        state.totalItems = state.items.reduce((sum, item) => sum + Number(item.quantity), 0);
+        state.totalAmount = state.items.reduce((sum, item) => sum + Number(item.subtotal), 0);
       })
       .addCase(updateCartItem.fulfilled, (state, action) => {
         const item = state.items.find(item => item.id === action.payload.id);
         if (item) {
-          item.quantity = action.payload.quantity;
-          item.subtotal = action.payload.subtotal;
+          item.quantity = Number(action.payload.quantity) || 0;
+          item.subtotal = Number(action.payload.subtotal) || 0;
         }
-        state.totalItems = state.items.reduce((sum, item) => sum + item.quantity, 0);
-        state.totalAmount = state.items.reduce((sum, item) => sum + item.subtotal, 0);
+        state.totalItems = state.items.reduce((sum, item) => sum + Number(item.quantity), 0);
+        state.totalAmount = state.items.reduce((sum, item) => sum + Number(item.subtotal), 0);
       })
       .addCase(removeCartItem.fulfilled, (state, action) => {
         state.items = state.items.filter(item => item.id !== action.payload);
-        state.totalItems = state.items.reduce((sum, item) => sum + item.quantity, 0);
-        state.totalAmount = state.items.reduce((sum, item) => sum + item.subtotal, 0);
+        state.totalItems = state.items.reduce((sum, item) => sum + Number(item.quantity), 0);
+        state.totalAmount = state.items.reduce((sum, item) => sum + Number(item.subtotal), 0);
       })
       .addCase(clearCart.fulfilled, (state) => {
         state.items = [];
