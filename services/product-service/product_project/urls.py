@@ -10,6 +10,7 @@ from product_app.views import (
     ProductDetailView,
     ProductSearchView,
     ProductByCategoryView,
+    TrackClickView,
 )
 
 urlpatterns = [
@@ -21,6 +22,7 @@ urlpatterns = [
     path('<uuid:pk>/', ProductDetailView.as_view(), name='product-detail'),
     path('search/', ProductSearchView.as_view(), name='product-search'),
     path('category/<uuid:category_id>/', ProductByCategoryView.as_view(), name='products-by-category'),
+    path('track/click/', TrackClickView.as_view(), name='track-click'),
 ]
 
 if settings.DEBUG:

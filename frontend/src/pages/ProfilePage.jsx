@@ -1,17 +1,28 @@
 import { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { Link } from 'react-router-dom';
 import userService from '../services/userService';
+import productService from '../services/productService';
 import AddressForm from '../components/address/AddressForm';
-import { UserIcon, MapPinIcon, HeartIcon, BellIcon, PencilIcon, TrashIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { removeFromWishlist } from '../store/slices/wishlistSlice';
+import { addToCart } from '../store/slices/cartSlice';
+import { UserIcon, MapPinIcon, HeartIcon, BellIcon, PencilIcon, TrashIcon, PlusIcon, ShoppingCartIcon } from '@heroicons/react/24/outline';
+import { formatPrice } from '../utils/format';
 import toast from 'react-hot-toast';
 
 const ProfilePage = () => {
+  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
+  const { items: wishlistItems } = useSelector((state) => state.wishlist);
   const [activeTab, setActiveTab] = useState('profile');
   const [profile, setProfile] = useState(null);
   const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Wishlist product details
+  const [wishlistProducts, setWishlistProducts] = useState([]);
+  const [loadingWishlist, setLoadingWishlist] = useState(false);
 
   // Address form state
   const [showAddressForm, setShowAddressForm] = useState(false);
@@ -27,6 +38,35 @@ const ProfilePage = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Load wishlist product details when wishlist items change
+  useEffect(() => {
+    const loadWishlistProducts = async () => {
+      if (wishlistItems.length === 0) {
+        setWishlistProducts([]);
+        return;
+      }
+      setLoadingWishlist(true);
+      try {
+        const products = await Promise.all(
+          wishlistItems.map(async (item) => {
+            try {
+              const product = await productService.getProductById(item.product_id);
+              return product;
+            } catch {
+              return null;
+            }
+          })
+        );
+        setWishlistProducts(products.filter(Boolean));
+      } catch (error) {
+        console.error('Error loading wishlist products:', error);
+      } finally {
+        setLoadingWishlist(false);
+      }
+    };
+    loadWishlistProducts();
+  }, [wishlistItems]);
 
   useEffect(() => {
     if (profile) {
@@ -331,11 +371,66 @@ const ProfilePage = () => {
             {/* Wishlist Tab */}
             {activeTab === 'wishlist' && (
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-6">Sản phẩm yêu thích</h2>
-                <div className="text-center py-12 bg-gray-50 rounded-lg">
-                  <HeartIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">Chưa có sản phẩm yêu thích</p>
-                </div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-6">
+                  San pham yeu thich ({wishlistProducts.length})
+                </h2>
+                {loadingWishlist ? (
+                  <p className="text-center py-8">Dang tai...</p>
+                ) : wishlistProducts.length === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 rounded-lg">
+                    <HeartIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500 mb-4">Chua co san pham yeu thich</p>
+                    <Link to="/products" className="btn-primary">
+                      Kham pha san pham
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {wishlistProducts.map((product) => (
+                      <div key={product.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <Link to={`/products/${product.id}`}>
+                          <img
+                            src={product.primary_image?.image || '/placeholder.png'}
+                            alt={product.name}
+                            className="w-full h-40 object-cover rounded-lg mb-3"
+                          />
+                          <h3 className="font-medium text-gray-900 line-clamp-2 mb-2 hover:text-primary-600">
+                            {product.name}
+                          </h3>
+                        </Link>
+                        <p className="text-lg font-bold text-red-600 mb-3">
+                          {formatPrice(product.price)}
+                        </p>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => {
+                              dispatch(addToCart({ productId: product.id, quantity: 1 }))
+                                .unwrap()
+                                .then(() => toast.success('Da them vao gio hang'))
+                                .catch((err) => toast.error(err));
+                            }}
+                            className="flex-1 btn-primary text-sm flex items-center justify-center"
+                          >
+                            <ShoppingCartIcon className="w-4 h-4 mr-1" />
+                            Them vao gio
+                          </button>
+                          <button
+                            onClick={() => {
+                              dispatch(removeFromWishlist(product.id))
+                                .unwrap()
+                                .then(() => toast.success('Da xoa khoi yeu thich'))
+                                .catch((err) => toast.error(err));
+                            }}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded border border-red-200"
+                            title="Xoa khoi yeu thich"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

@@ -1,9 +1,38 @@
+import logging
+import httpx
+import os
+from threading import Thread
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import Profile, Address, Wishlist
 from .serializers import ProfileSerializer, AddressSerializer, WishlistSerializer
+
+logger = logging.getLogger(__name__)
+
+
+def track_behavior(user_id, action, product_id=None, metadata=None):
+    """Send tracking request to recommendation service (async)."""
+    if not user_id:
+        return
+
+    def _send():
+        try:
+            url = os.environ.get('RECOMMENDATION_SERVICE_URL', 'http://ai-recommendation:8000')
+            payload = {
+                'user_id': str(user_id),
+                'action': action,
+                'product_id': str(product_id) if product_id else None,
+                'metadata': metadata or {},
+            }
+            httpx.post(f"{url}/track/", json=payload, timeout=5.0)
+        except Exception as e:
+            logger.warning(f"Tracking error: {e}")
+
+    thread = Thread(target=_send)
+    thread.daemon = True
+    thread.start()
 
 
 class HealthCheckView(APIView):
@@ -98,6 +127,12 @@ class WishlistView(APIView):
             product_id=product_id
         )
         if created:
+            # Track add_to_wishlist behavior
+            track_behavior(
+                user_id=request.user.id,
+                action='add_to_wishlist',
+                product_id=product_id,
+            )
             return Response({'message': 'Đã thêm vào danh sách yêu thích'}, status=status.HTTP_201_CREATED)
         return Response({'message': 'Sản phẩm đã có trong danh sách yêu thích'})
 

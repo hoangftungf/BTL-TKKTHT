@@ -5,6 +5,7 @@ const initialState = {
   cartDrawerOpen: false,
   searchModalOpen: false,
   mobileMenuOpen: false,
+  loginModalOpen: false,
 };
 
 const uiSlice = createSlice({
@@ -35,6 +36,12 @@ const uiSlice = createSlice({
     setMobileMenuOpen: (state, action) => {
       state.mobileMenuOpen = action.payload;
     },
+    toggleLoginModal: (state) => {
+      state.loginModalOpen = !state.loginModalOpen;
+    },
+    setLoginModalOpen: (state, action) => {
+      state.loginModalOpen = action.payload;
+    },
   },
 });
 
@@ -47,6 +54,8 @@ export const {
   setSearchModalOpen,
   toggleMobileMenu,
   setMobileMenuOpen,
+  toggleLoginModal,
+  setLoginModalOpen,
 } = uiSlice.actions;
 
 export default uiSlice.reducer;

@@ -52,7 +52,7 @@ class BaseProxyView(APIView):
 
         # Prepare request body
         body = None
-        if request.method in ['POST', 'PUT', 'PATCH']:
+        if request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
             if request.data:
                 body = json.dumps(request.data)
                 headers['Content-Type'] = 'application/json'

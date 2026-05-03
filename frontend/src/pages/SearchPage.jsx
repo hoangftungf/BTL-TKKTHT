@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { searchService } from '../services/aiService';
 import ProductGrid from '../components/product/ProductGrid';
+import ProductRecommendations from '../components/product/ProductRecommendations';
 
 const SearchPage = () => {
   const [searchParams] = useSearchParams();
@@ -11,6 +13,8 @@ const SearchPage = () => {
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [suggestions, setSuggestions] = useState([]);
+
+  const { user, isAuthenticated } = useSelector((state) => state.auth);
 
   useEffect(() => {
     const searchWithAI = async () => {
@@ -88,8 +92,30 @@ const SearchPage = () => {
       <ProductGrid
         products={products}
         loading={loading}
-        emptyMessage={`Không tìm thấy sản phẩm cho "${query}"`}
+        emptyMessage={`Khong tim thay san pham cho "${query}"`}
       />
+
+      {/* AI Recommendations */}
+      {!loading && (
+        <div className="mt-12 border-t border-gray-200">
+          {/* Personalized recommendations if logged in */}
+          {isAuthenticated && user?.id && (
+            <ProductRecommendations
+              userId={user.id}
+              type="personalized"
+              title="Goi y danh cho ban"
+              limit={6}
+            />
+          )}
+
+          {/* Trending products */}
+          <ProductRecommendations
+            type="trending"
+            title="San pham pho bien"
+            limit={6}
+          />
+        </div>
+      )}
     </div>
   );
 };

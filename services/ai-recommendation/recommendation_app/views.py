@@ -439,6 +439,145 @@ class TrainAllModelsView(APIView):
 
 # ===================== SEED DATA VIEW =====================
 
+# ===================== TRACKING API =====================
+
+class TrackBehaviorView(APIView):
+    """
+    Universal behavior tracking endpoint.
+    Use this when tracking from frontend or other services.
+
+    POST /track/
+    {
+        "user_id": "uuid",           # Optional if authenticated
+        "action": "view_product",    # Required: one of 8 actions
+        "product_id": "uuid",        # Optional
+        "category_id": "uuid",       # Optional
+        "metadata": {}               # Optional
+    }
+
+    Valid actions:
+    - view_product
+    - click_product
+    - add_to_cart
+    - remove_from_cart
+    - purchase
+    - add_to_wishlist
+    - search
+    - view_category
+    """
+    permission_classes = [AllowAny]
+
+    VALID_ACTIONS = [
+        'view_product', 'click_product', 'add_to_cart', 'remove_from_cart',
+        'purchase', 'add_to_wishlist', 'search', 'view_category'
+    ]
+
+    def post(self, request):
+        from .services.tracking_service import TrackingService
+
+        # Get user_id from request body or authenticated user
+        user_id = request.data.get('user_id')
+        if not user_id and request.user and request.user.is_authenticated:
+            user_id = request.user.id
+
+        action = request.data.get('action')
+        product_id = request.data.get('product_id')
+        category_id = request.data.get('category_id')
+        metadata = request.data.get('metadata', {})
+        search_query = request.data.get('search_query') or metadata.get('query')
+
+        # Validate required fields
+        if not user_id:
+            return Response(
+                {'error': 'user_id is required for anonymous users'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not action:
+            return Response(
+                {'error': 'action is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if action not in self.VALID_ACTIONS:
+            return Response(
+                {'error': f'Invalid action. Valid actions: {self.VALID_ACTIONS}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Track the behavior
+        success = TrackingService.track(
+            user_id=user_id,
+            action=action,
+            product_id=product_id,
+            category_id=category_id,
+            metadata=metadata,
+            search_query=search_query,
+        )
+
+        if success:
+            return Response({
+                'status': 'tracked',
+                'action': action,
+                'user_id': str(user_id),
+                'product_id': str(product_id) if product_id else None,
+                'category_id': str(category_id) if category_id else None,
+            })
+        else:
+            return Response(
+                {'error': 'Failed to track behavior'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class BehaviorStatsView(APIView):
+    """Get behavior statistics for validation"""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from .models import UserBehavior
+        from django.db.models import Count
+
+        # Total count
+        total = UserBehavior.objects.count()
+
+        # By action
+        by_action = list(
+            UserBehavior.objects.values('action')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
+
+        # By user (top 10)
+        by_user = list(
+            UserBehavior.objects.values('user_id')
+            .annotate(count=Count('id'))
+            .order_by('-count')[:10]
+        )
+
+        # User stats
+        user_counts = UserBehavior.objects.values('user_id').annotate(count=Count('id'))
+        user_count_list = [u['count'] for u in user_counts]
+
+        stats = {
+            'total_behaviors': total,
+            'total_users': len(user_count_list),
+            'avg_behaviors_per_user': sum(user_count_list) / len(user_count_list) if user_count_list else 0,
+            'min_behaviors_per_user': min(user_count_list) if user_count_list else 0,
+            'max_behaviors_per_user': max(user_count_list) if user_count_list else 0,
+            'by_action': by_action,
+            'top_users': by_user,
+            'validation': {
+                'total_ge_10000': total >= 10000,
+                'all_users_ge_20': min(user_count_list) >= 20 if user_count_list else False,
+            }
+        }
+
+        return Response(stats)
+
+
+# ===================== SEED DATA VIEW =====================
+
 class SeedDataView(APIView):
     """Seed sample data for testing"""
     permission_classes = [AllowAny]

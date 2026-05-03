@@ -5,6 +5,7 @@ import { fetchCart, clearCart } from '../store/slices/cartSlice';
 import CartItem from '../components/cart/CartItem';
 import Loading from '../components/common/Loading';
 import Empty from '../components/common/Empty';
+import ProductRecommendations from '../components/product/ProductRecommendations';
 import { ShoppingBagIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { formatPrice } from '../utils/format';
 import toast from 'react-hot-toast';
@@ -107,11 +108,31 @@ const CartPage = () => {
               Tiến hành thanh toán
             </button>
             <Link to="/products" className="btn-secondary w-full text-center block">
-              Tiếp tục mua sắm
+              Tiep tuc mua sam
             </Link>
           </div>
         </div>
       </div>
+
+      {/* AI Recommendations based on cart items */}
+      {items && items.length > 0 && (
+        <div className="mt-12 border-t border-gray-200">
+          {/* Similar to first item in cart */}
+          <ProductRecommendations
+            productId={items[0]?.product?.id || items[0]?.product_id}
+            type="similar"
+            title="Co the ban cung thich"
+            limit={6}
+          />
+
+          {/* Trending products */}
+          <ProductRecommendations
+            type="trending"
+            title="San pham ban chay"
+            limit={6}
+          />
+        </div>
+      )}
     </div>
   );
 };

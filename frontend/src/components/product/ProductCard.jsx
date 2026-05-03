@@ -1,21 +1,52 @@
 import { Link } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { addToCart } from '../../store/slices/cartSlice';
+import { addToWishlist, removeFromWishlist } from '../../store/slices/wishlistSlice';
+import { setLoginModalOpen } from '../../store/slices/uiSlice';
 import { ShoppingCartIcon, StarIcon } from '@heroicons/react/24/solid';
-import { HeartIcon } from '@heroicons/react/24/outline';
+import { HeartIcon as HeartOutline } from '@heroicons/react/24/outline';
+import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
 import toast from 'react-hot-toast';
 import { formatPrice } from '../../utils/format';
 
 const ProductCard = ({ product }) => {
   const dispatch = useDispatch();
+  const { isAuthenticated } = useSelector((state) => state.auth);
+  const { productIds: wishlistIds } = useSelector((state) => state.wishlist);
+
+  const isInWishlist = wishlistIds.includes(product.id);
 
   const handleAddToCart = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!isAuthenticated) {
+      dispatch(setLoginModalOpen(true));
+      return;
+    }
     dispatch(addToCart({ productId: product.id, quantity: 1 }))
       .unwrap()
-      .then(() => toast.success('Đã thêm vào giỏ hàng'))
+      .then(() => toast.success('Da them vao gio hang'))
       .catch((err) => toast.error(err));
+  };
+
+  const handleToggleWishlist = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isAuthenticated) {
+      dispatch(setLoginModalOpen(true));
+      return;
+    }
+    if (isInWishlist) {
+      dispatch(removeFromWishlist(product.id))
+        .unwrap()
+        .then(() => toast.success('Da xoa khoi yeu thich'))
+        .catch((err) => toast.error(err));
+    } else {
+      dispatch(addToWishlist(product.id))
+        .unwrap()
+        .then(() => toast.success('Da them vao yeu thich'))
+        .catch((err) => toast.error(err));
+    }
   };
 
   const primaryImage = product.primary_image?.image || '/placeholder.png';
@@ -35,10 +66,16 @@ const ProductCard = ({ product }) => {
           </span>
         )}
         <button
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-          className="absolute top-2 right-2 p-2 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500"
+          onClick={handleToggleWishlist}
+          className={`absolute top-2 right-2 p-2 bg-white rounded-full shadow-md transition-all ${
+            isInWishlist ? 'opacity-100 text-red-500' : 'opacity-0 group-hover:opacity-100 hover:text-red-500'
+          }`}
         >
-          <HeartIcon className="w-5 h-5" />
+          {isInWishlist ? (
+            <HeartSolid className="w-5 h-5" />
+          ) : (
+            <HeartOutline className="w-5 h-5" />
+          )}
         </button>
       </div>
 

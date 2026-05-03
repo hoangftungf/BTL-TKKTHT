@@ -1,4 +1,7 @@
+import logging
 import httpx
+import os
+from threading import Thread
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import status
@@ -7,6 +10,60 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import Order, OrderItem, OrderStatusHistory
 from .serializers import OrderListSerializer, OrderDetailSerializer, CreateOrderSerializer
+
+logger = logging.getLogger(__name__)
+
+
+def track_behavior(user_id, action, product_id=None, metadata=None):
+    """Send tracking request to recommendation service (async)."""
+    if not user_id:
+        return
+
+    def _send():
+        try:
+            url = os.environ.get('RECOMMENDATION_SERVICE_URL', 'http://ai-recommendation:8008')
+            payload = {
+                'user_id': str(user_id),
+                'action': action,
+                'product_id': str(product_id) if product_id else None,
+                'metadata': metadata or {},
+            }
+            httpx.post(f"{url}/track/", json=payload, timeout=5.0)
+        except Exception as e:
+            logger.warning(f"Tracking error: {e}")
+
+    thread = Thread(target=_send)
+    thread.daemon = True
+    thread.start()
+
+
+def track_purchase_bulk(user_id, items, order_id):
+    """Track purchase for all items in order."""
+    if not user_id:
+        return
+
+    def _send():
+        try:
+            url = os.environ.get('RECOMMENDATION_SERVICE_URL', 'http://ai-recommendation:8008')
+            for item in items:
+                payload = {
+                    'user_id': str(user_id),
+                    'action': 'purchase',
+                    'product_id': str(item['product_id']),
+                    'metadata': {
+                        'order_id': str(order_id),
+                        'quantity': item['quantity'],
+                        'price': float(item['price']),
+                        'product_name': item.get('product_name', ''),
+                    },
+                }
+                httpx.post(f"{url}/track/", json=payload, timeout=5.0)
+        except Exception as e:
+            logger.warning(f"Tracking error: {e}")
+
+    thread = Thread(target=_send)
+    thread.daemon = True
+    thread.start()
 
 
 class HealthCheckView(APIView):
@@ -77,6 +134,13 @@ class OrderListCreateView(APIView):
             )
 
         OrderStatusHistory.objects.create(order=order, status='pending', note='Đơn hàng mới được tạo')
+
+        # Track purchase behavior for all items
+        track_purchase_bulk(
+            user_id=request.user.id,
+            items=cart_data.get('items', []),
+            order_id=order.id
+        )
 
         try:
             httpx.delete(f"{settings.CART_SERVICE_URL}/clear/", headers=headers, timeout=5.0)

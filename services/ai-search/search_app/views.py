@@ -1,3 +1,6 @@
+import logging
+import os
+from threading import Thread
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -5,6 +8,34 @@ from rest_framework.permissions import AllowAny
 from .engine import search_engine
 import httpx
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+
+def track_search(user_id, query, results_count=0, metadata=None):
+    """Send search tracking request to recommendation service (async)."""
+    if not user_id:
+        return
+
+    def _send():
+        try:
+            url = os.environ.get('RECOMMENDATION_SERVICE_URL', 'http://ai-recommendation:8008')
+            payload = {
+                'user_id': str(user_id),
+                'action': 'search',
+                'search_query': query,
+                'metadata': {
+                    'results_count': results_count,
+                    **(metadata or {})
+                },
+            }
+            httpx.post(f"{url}/track/", json=payload, timeout=5.0)
+        except Exception as e:
+            logger.warning(f"Tracking error: {e}")
+
+    thread = Thread(target=_send)
+    thread.daemon = True
+    thread.start()
 
 
 class HealthCheckView(APIView):
@@ -41,6 +72,15 @@ class SmartSearchView(APIView):
             page_size=page_size
         )
 
+        # Track search behavior
+        if request.user and request.user.is_authenticated and query:
+            track_search(
+                user_id=request.user.id,
+                query=query,
+                results_count=result.get('count', 0),
+                metadata={'filters': filters, 'page': page}
+            )
+
         # Fetch full product details
         if result['results']:
             product_ids = [r['product_id'] for r in result['results']]
@@ -62,6 +102,15 @@ class SmartSearchView(APIView):
             page=page,
             page_size=page_size
         )
+
+        # Track search behavior
+        if request.user and request.user.is_authenticated and query:
+            track_search(
+                user_id=request.user.id,
+                query=query,
+                results_count=result.get('count', 0),
+                metadata={'page': page}
+            )
 
         return Response(result)
 

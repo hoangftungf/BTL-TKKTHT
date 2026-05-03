@@ -14,6 +14,7 @@ class Category(models.Model):
         'self', on_delete=models.CASCADE, blank=True, null=True,
         related_name='children', verbose_name='Danh mục cha'
     )
+    level = models.IntegerField(default=0, verbose_name='Cấp độ', db_index=True)
     is_active = models.BooleanField(default=True, verbose_name='Hoạt động')
     display_order = models.IntegerField(default=0, verbose_name='Thứ tự hiển thị')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Ngày tạo')
@@ -27,6 +28,37 @@ class Category(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        # Auto-calculate level based on parent
+        if self.parent:
+            self.level = self.parent.level + 1
+        else:
+            self.level = 0
+        super().save(*args, **kwargs)
+
+    @property
+    def full_path(self):
+        """Get full category path: Parent > Child > Grandchild"""
+        if self.parent:
+            return f"{self.parent.full_path} > {self.name}"
+        return self.name
+
+    def get_ancestors(self):
+        """Get all ancestor categories"""
+        ancestors = []
+        current = self.parent
+        while current:
+            ancestors.insert(0, current)
+            current = current.parent
+        return ancestors
+
+    def get_descendants(self):
+        """Get all descendant categories"""
+        descendants = list(self.children.all())
+        for child in self.children.all():
+            descendants.extend(child.get_descendants())
+        return descendants
 
 
 class Product(models.Model):

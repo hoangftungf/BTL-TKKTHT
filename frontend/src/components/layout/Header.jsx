@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../../store/slices/authSlice';
 import { fetchCategories } from '../../store/slices/productSlice';
+import { setLoginModalOpen } from '../../store/slices/uiSlice';
 import { MagnifyingGlassIcon, ShoppingCartIcon, UserIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
 
 const Header = () => {
@@ -60,14 +61,23 @@ const Header = () => {
           {/* Right Navigation */}
           <div className="flex items-center space-x-4">
             {/* Cart */}
-            <Link to="/cart" className="relative p-2 text-gray-600 hover:text-primary-600">
-              <ShoppingCartIcon className="w-6 h-6" />
-              {totalItems > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                  {totalItems > 99 ? '99+' : totalItems}
-                </span>
-              )}
-            </Link>
+            {isAuthenticated ? (
+              <Link to="/cart" className="relative p-2 text-gray-600 hover:text-primary-600">
+                <ShoppingCartIcon className="w-6 h-6" />
+                {totalItems > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                    {totalItems > 99 ? '99+' : totalItems}
+                  </span>
+                )}
+              </Link>
+            ) : (
+              <button
+                onClick={() => dispatch(setLoginModalOpen(true))}
+                className="relative p-2 text-gray-600 hover:text-primary-600"
+              >
+                <ShoppingCartIcon className="w-6 h-6" />
+              </button>
+            )}
 
             {/* User Menu */}
             {isAuthenticated ? (

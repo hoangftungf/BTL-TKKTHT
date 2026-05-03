@@ -8,6 +8,9 @@ from recommendation_app.views import (
     FrequentlyBoughtTogetherView,
     TrainModelView,
     RecordInteractionView,
+    # Tracking
+    TrackBehaviorView,
+    BehaviorStatsView,
     # Hybrid Engine
     HybridRecommendationsView,
     HybridChatbotView,
@@ -63,4 +66,8 @@ urlpatterns = [
 
     # Seed Data (for testing)
     path('seed/', SeedDataView.as_view()),
+
+    # Behavior Tracking API
+    path('track/', TrackBehaviorView.as_view()),
+    path('behaviors/stats/', BehaviorStatsView.as_view()),
 ]

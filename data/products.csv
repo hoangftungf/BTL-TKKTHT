@@ -1,0 +1,101 @@
+product_id,name,category,brand,price
+P0001,Apple Laptop Model 1,Laptop,Apple,49864611
+P0002,Sony Đồng hồ Model 2,Đồng hồ,Sony,15079419
+P0003,Samsung Máy tính bảng Model 3,Máy tính bảng,Samsung,45512533
+P0004,Samsung Thể thao Model 4,Thể thao,Samsung,39727281
+P0005,Apple Gia dụng Model 5,Gia dụng,Apple,2099657
+P0006,Sony Laptop Model 6,Laptop,Sony,15713608
+P0007,Acer Thể thao Model 7,Thể thao,Acer,1880798
+P0008,Sony Thể thao Model 8,Thể thao,Sony,48151262
+P0009,HP Thể thao Model 9,Thể thao,HP,14893519
+P0010,Acer Sách Model 10,Sách,Acer,18769062
+P0011,Xiaomi Điện thoại Model 11,Điện thoại,Xiaomi,46951341
+P0012,Dell Gia dụng Model 12,Gia dụng,Dell,18747630
+P0013,Sony Máy tính bảng Model 13,Máy tính bảng,Sony,22688477
+P0014,Samsung Laptop Model 14,Laptop,Samsung,25596489
+P0015,Dell Laptop Model 15,Laptop,Dell,23182477
+P0016,LG Mỹ phẩm Model 16,Mỹ phẩm,LG,3015909
+P0017,Lenovo Sách Model 17,Sách,Lenovo,8476941
+P0018,Samsung Gia dụng Model 18,Gia dụng,Samsung,37146819
+P0019,Acer Đồng hồ Model 19,Đồng hồ,Acer,24368915
+P0020,Sony Mỹ phẩm Model 20,Mỹ phẩm,Sony,47383015
+P0021,Apple Laptop Model 21,Laptop,Apple,44476630
+P0022,LG Phụ kiện Model 22,Phụ kiện,LG,5454748
+P0023,Samsung Phụ kiện Model 23,Phụ kiện,Samsung,25609839
+P0024,Asus Đồng hồ Model 24,Đồng hồ,Asus,42760060
+P0025,Xiaomi Thời trang Model 25,Thời trang,Xiaomi,24942424
+P0026,Sony Thời trang Model 26,Thời trang,Sony,45074694
+P0027,Samsung Đồng hồ Model 27,Đồng hồ,Samsung,40978089
+P0028,Lenovo Máy tính bảng Model 28,Máy tính bảng,Lenovo,49030871
+P0029,Xiaomi Phụ kiện Model 29,Phụ kiện,Xiaomi,31121757
+P0030,LG Gia dụng Model 30,Gia dụng,LG,43049656
+P0031,Sony Thể thao Model 31,Thể thao,Sony,46043684
+P0032,Apple Thời trang Model 32,Thời trang,Apple,15471155
+P0033,Dell Điện thoại Model 33,Điện thoại,Dell,27021713
+P0034,Samsung Đồng hồ Model 34,Đồng hồ,Samsung,14258818
+P0035,Dell Mỹ phẩm Model 35,Mỹ phẩm,Dell,14369125
+P0036,HP Sách Model 36,Sách,HP,43241058
+P0037,Xiaomi Sách Model 37,Sách,Xiaomi,17875807
+P0038,Sony Máy tính bảng Model 38,Máy tính bảng,Sony,37772777
+P0039,LG Thể thao Model 39,Thể thao,LG,39330901
+P0040,Acer Gia dụng Model 40,Gia dụng,Acer,26903314
+P0041,Sony Thời trang Model 41,Thời trang,Sony,9383286
+P0042,Asus Thể thao Model 42,Thể thao,Asus,6200827
+P0043,Samsung Điện thoại Model 43,Điện thoại,Samsung,10357007
+P0044,HP Máy tính bảng Model 44,Máy tính bảng,HP,40124332
+P0045,HP Laptop Model 45,Laptop,HP,25710036
+P0046,Asus Mỹ phẩm Model 46,Mỹ phẩm,Asus,35608262
+P0047,Lenovo Đồng hồ Model 47,Đồng hồ,Lenovo,870478
+P0048,Lenovo Laptop Model 48,Laptop,Lenovo,18006335
+P0049,Samsung Thời trang Model 49,Thời trang,Samsung,19796460
+P0050,Xiaomi Gia dụng Model 50,Gia dụng,Xiaomi,30548882
+P0051,LG Điện thoại Model 51,Điện thoại,LG,33693765
+P0052,Lenovo Máy tính bảng Model 52,Máy tính bảng,Lenovo,7241109
+P0053,Lenovo Đồng hồ Model 53,Đồng hồ,Lenovo,40967299
+P0054,Xiaomi Phụ kiện Model 54,Phụ kiện,Xiaomi,25192933
+P0055,Lenovo Máy tính bảng Model 55,Máy tính bảng,Lenovo,35691432
+P0056,Acer Điện thoại Model 56,Điện thoại,Acer,21853744
+P0057,Apple Sách Model 57,Sách,Apple,7607315
+P0058,LG Thời trang Model 58,Thời trang,LG,16169372
+P0059,Sony Điện thoại Model 59,Điện thoại,Sony,38174679
+P0060,Samsung Laptop Model 60,Laptop,Samsung,49217487
+P0061,Samsung Sách Model 61,Sách,Samsung,35849305
+P0062,Xiaomi Máy tính bảng Model 62,Máy tính bảng,Xiaomi,44375128
+P0063,Lenovo Sách Model 63,Sách,Lenovo,11181482
+P0064,Lenovo Đồng hồ Model 64,Đồng hồ,Lenovo,40807828
+P0065,Sony Gia dụng Model 65,Gia dụng,Sony,36291547
+P0066,LG Phụ kiện Model 66,Phụ kiện,LG,26875919
+P0067,Asus Thời trang Model 67,Thời trang,Asus,34833926
+P0068,Samsung Sách Model 68,Sách,Samsung,16736664
+P0069,Samsung Phụ kiện Model 69,Phụ kiện,Samsung,22788538
+P0070,Acer Điện thoại Model 70,Điện thoại,Acer,37273044
+P0071,Acer Phụ kiện Model 71,Phụ kiện,Acer,14878538
+P0072,Samsung Điện thoại Model 72,Điện thoại,Samsung,47602401
+P0073,Sony Điện thoại Model 73,Điện thoại,Sony,4623159
+P0074,Dell Điện thoại Model 74,Điện thoại,Dell,4855156
+P0075,Sony Thể thao Model 75,Thể thao,Sony,18788292
+P0076,Sony Sách Model 76,Sách,Sony,36287376
+P0077,Acer Máy tính bảng Model 77,Máy tính bảng,Acer,38768909
+P0078,Sony Sách Model 78,Sách,Sony,31840676
+P0079,Sony Gia dụng Model 79,Gia dụng,Sony,6430097
+P0080,HP Laptop Model 80,Laptop,HP,23876507
+P0081,HP Gia dụng Model 81,Gia dụng,HP,31441494
+P0082,Samsung Điện thoại Model 82,Điện thoại,Samsung,4167647
+P0083,Dell Gia dụng Model 83,Gia dụng,Dell,7432920
+P0084,Sony Phụ kiện Model 84,Phụ kiện,Sony,12864703
+P0085,Asus Thể thao Model 85,Thể thao,Asus,9507474
+P0086,Xiaomi Gia dụng Model 86,Gia dụng,Xiaomi,18792848
+P0087,Sony Sách Model 87,Sách,Sony,5158994
+P0088,Lenovo Sách Model 88,Sách,Lenovo,6670543
+P0089,Lenovo Điện thoại Model 89,Điện thoại,Lenovo,1090382
+P0090,Sony Laptop Model 90,Laptop,Sony,11260949
+P0091,Asus Gia dụng Model 91,Gia dụng,Asus,32403416
+P0092,HP Phụ kiện Model 92,Phụ kiện,HP,4034955
+P0093,HP Máy tính bảng Model 93,Máy tính bảng,HP,244644
+P0094,LG Gia dụng Model 94,Gia dụng,LG,30635094
+P0095,HP Đồng hồ Model 95,Đồng hồ,HP,46847464
+P0096,Asus Thể thao Model 96,Thể thao,Asus,10488239
+P0097,LG Phụ kiện Model 97,Phụ kiện,LG,14709659
+P0098,Acer Điện thoại Model 98,Điện thoại,Acer,49474486
+P0099,Apple Thể thao Model 99,Thể thao,Apple,21145662
+P0100,Apple Điện thoại Model 100,Điện thoại,Apple,39303494

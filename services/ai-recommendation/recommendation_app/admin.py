@@ -1,5 +1,15 @@
 from django.contrib import admin
-from .models import UserInteraction, ProductSimilarity, UserRecommendation
+from .models import UserBehavior, UserInteraction, ProductSimilarity, UserRecommendation
+
+
+@admin.register(UserBehavior)
+class UserBehaviorAdmin(admin.ModelAdmin):
+    list_display = ('user_id', 'product_id', 'action', 'search_query', 'created_at')
+    list_filter = ('action', 'created_at')
+    search_fields = ('user_id', 'product_id', 'search_query')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
+
 
 @admin.register(UserInteraction)
 class UserInteractionAdmin(admin.ModelAdmin):

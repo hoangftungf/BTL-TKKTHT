@@ -2,17 +2,46 @@ import api from './api';
 
 // AI Recommendation Service
 export const recommendationService = {
-  getPersonalized: (userId, limit = 10) =>
-    api.get(`/recommendations/user/${userId}/?limit=${limit}`),
+  getPersonalized: async (userId, limit = 10) => {
+    const response = await api.get(`/recommendations/user/?limit=${limit}`);
+    // Transform response to extract products array
+    const recommendations = response.data.recommendations || [];
+    return {
+      ...response,
+      data: {
+        ...response.data,
+        products: recommendations.map(r => r.product).filter(Boolean)
+      }
+    };
+  },
 
-  getSimilar: (productId, limit = 10) =>
-    api.get(`/recommendations/product/${productId}/?limit=${limit}`),
+  getSimilar: async (productId, limit = 10) => {
+    const response = await api.get(`/recommendations/product/${productId}/?limit=${limit}`);
+    const similar = response.data.similar_products || [];
+    return {
+      ...response,
+      data: {
+        ...response.data,
+        products: similar.map(r => r.product).filter(Boolean)
+      }
+    };
+  },
 
-  getTrending: (limit = 10) =>
-    api.get(`/recommendations/trending/?limit=${limit}`),
+  getTrending: async (limit = 10) => {
+    const response = await api.get(`/recommendations/trending/?limit=${limit}`);
+    // Transform response to extract products array
+    const trending = response.data.trending || [];
+    return {
+      ...response,
+      data: {
+        ...response.data,
+        products: trending.map(r => r.product).filter(Boolean)
+      }
+    };
+  },
 
   recordInteraction: (data) =>
-    api.post('/recommendations/interact/', data),
+    api.post('/recommendations/interaction/', data),
 };
 
 // AI Search Service

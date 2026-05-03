@@ -12,3 +12,6 @@ ollama>=0.1.0
 numpy>=1.26.0
 scikit-learn>=1.4.0
 faiss-cpu>=1.7.4
+
+# Knowledge Graph
+neo4j>=5.15.0

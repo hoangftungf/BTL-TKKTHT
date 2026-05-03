@@ -1,3 +1,4 @@
+import logging
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -9,6 +10,36 @@ from .serializers import (
     ProductListSerializer,
     ProductDetailSerializer,
 )
+
+logger = logging.getLogger(__name__)
+
+
+def track_behavior(user_id, action, product_id=None, category_id=None, metadata=None):
+    """Send tracking request to recommendation service (async)."""
+    import httpx
+    import os
+    from threading import Thread
+
+    if not user_id:
+        return
+
+    def _send():
+        try:
+            url = os.environ.get('RECOMMENDATION_SERVICE_URL', 'http://ai-recommendation:8000')
+            payload = {
+                'user_id': str(user_id),
+                'action': action,
+                'product_id': str(product_id) if product_id else None,
+                'category_id': str(category_id) if category_id else None,
+                'metadata': metadata or {},
+            }
+            httpx.post(f"{url}/track/", json=payload, timeout=5.0)
+        except Exception as e:
+            logger.warning(f"Tracking error: {e}")
+
+    thread = Thread(target=_send)
+    thread.daemon = True
+    thread.start()
 
 
 class HealthCheckView(APIView):
@@ -117,6 +148,16 @@ class ProductDetailView(APIView):
         product.view_count += 1
         product.save(update_fields=['view_count'])
 
+        # Track view_product behavior
+        if request.user and request.user.is_authenticated:
+            track_behavior(
+                user_id=request.user.id,
+                action='view_product',
+                product_id=pk,
+                category_id=product.category_id,
+                metadata={'product_name': product.name}
+            )
+
         serializer = ProductDetailSerializer(product)
         return Response(serializer.data)
 
@@ -176,12 +217,23 @@ class ProductByCategoryView(APIView):
 
     def get(self, request, category_id):
         # Include products from category and all its children
+        category_name = None
         try:
             cat_obj = Category.objects.get(pk=category_id)
+            category_name = cat_obj.name
             child_ids = cat_obj.children.values_list('id', flat=True)
             category_ids = [cat_obj.id] + list(child_ids)
         except Category.DoesNotExist:
             category_ids = [category_id]
+
+        # Track view_category behavior
+        if request.user and request.user.is_authenticated:
+            track_behavior(
+                user_id=request.user.id,
+                action='view_category',
+                category_id=category_id,
+                metadata={'category_name': category_name}
+            )
 
         products = Product.objects.filter(
             category_id__in=category_ids,
@@ -203,3 +255,24 @@ class ProductByCategoryView(APIView):
             'page_size': page_size,
             'results': serializer.data
         })
+
+
+class TrackClickView(APIView):
+    """Track product click from product listing (click_product action)"""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        product_id = request.data.get('product_id')
+        if not product_id:
+            return Response({'error': 'product_id required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if request.user and request.user.is_authenticated:
+            track_behavior(
+                user_id=request.user.id,
+                action='click_product',
+                product_id=product_id,
+                metadata=request.data.get('metadata', {})
+            )
+            return Response({'status': 'tracked'})
+
+        return Response({'status': 'skipped', 'reason': 'anonymous user'})

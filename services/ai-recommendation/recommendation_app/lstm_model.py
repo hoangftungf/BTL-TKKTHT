@@ -1,6 +1,7 @@
 """
-LSTM Model for Sequence-based Product Recommendation
-Dự đoán sản phẩm tiếp theo dựa trên chuỗi hành vi của user
+Sequence-based Product Recommendation Models
+Hỗ trợ 3 mô hình: RNN, LSTM, BiLSTM
+Model tốt nhất: BiLSTM (bidirectional - học context từ cả 2 chiều)
 """
 
 import os
@@ -12,6 +13,9 @@ from torch.utils.data import Dataset, DataLoader
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+# Model mặc định - BiLSTM là tốt nhất
+DEFAULT_MODEL_TYPE = 'bilstm'
 
 
 class ProductSequenceDataset(Dataset):
@@ -106,19 +110,122 @@ class LSTMRecommender(nn.Module):
             return self.embedding(indices).numpy()
 
 
+class RNNRecommender(nn.Module):
+    """
+    Simple RNN Model - Baseline
+    Ưu điểm: Nhanh, ít parameters
+    Nhược điểm: Khó học long-term dependencies
+    """
+
+    def __init__(self, num_products, embedding_dim=64, hidden_dim=128, num_layers=2, dropout=0.2):
+        super(RNNRecommender, self).__init__()
+        self.num_products = num_products
+        self.embedding_dim = embedding_dim
+        self.hidden_dim = hidden_dim
+
+        self.embedding = nn.Embedding(num_products + 1, embedding_dim, padding_idx=0)
+        self.rnn = nn.RNN(embedding_dim, hidden_dim, num_layers, batch_first=True,
+                          dropout=dropout if num_layers > 1 else 0)
+        self.fc = nn.Linear(hidden_dim, num_products + 1)
+
+    def forward(self, x):
+        embedded = self.embedding(x)
+        output, hidden = self.rnn(embedded)
+        return self.fc(hidden[-1])
+
+    def get_embeddings(self, product_ids):
+        with torch.no_grad():
+            indices = torch.tensor(product_ids, dtype=torch.long)
+            return self.embedding(indices).numpy()
+
+
+class BiLSTMRecommender(nn.Module):
+    """
+    Bidirectional LSTM Model - BEST MODEL
+    Ưu điểm: Học context từ cả 2 chiều (quá khứ và tương lai)
+    Cho kết quả tốt nhất trong 3 mô hình
+    """
+
+    def __init__(self, num_products, embedding_dim=64, hidden_dim=128, num_layers=2, dropout=0.2):
+        super(BiLSTMRecommender, self).__init__()
+        self.num_products = num_products
+        self.embedding_dim = embedding_dim
+        self.hidden_dim = hidden_dim
+
+        self.embedding = nn.Embedding(num_products + 1, embedding_dim, padding_idx=0)
+
+        # Bidirectional LSTM
+        self.bilstm = nn.LSTM(
+            input_size=embedding_dim,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            bidirectional=True,
+            dropout=dropout if num_layers > 1 else 0
+        )
+
+        # Attention cho bidirectional output (hidden_dim * 2)
+        self.attention = nn.Linear(hidden_dim * 2, 1)
+
+        # Output layers
+        self.fc1 = nn.Linear(hidden_dim * 2, hidden_dim)
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(dropout)
+        self.fc2 = nn.Linear(hidden_dim, num_products + 1)
+
+    def forward(self, x):
+        embedded = self.embedding(x)
+        lstm_out, (hidden, cell) = self.bilstm(embedded)
+
+        # Attention mechanism
+        attention_weights = torch.softmax(self.attention(lstm_out), dim=1)
+        context = torch.sum(attention_weights * lstm_out, dim=1)
+
+        # Fully connected
+        out = self.fc1(context)
+        out = self.relu(out)
+        out = self.dropout(out)
+        out = self.fc2(out)
+        return out
+
+    def get_embeddings(self, product_ids):
+        with torch.no_grad():
+            indices = torch.tensor(product_ids, dtype=torch.long)
+            return self.embedding(indices).numpy()
+
+
+def get_model(model_type, num_products, embedding_dim=64, hidden_dim=128, num_layers=2, dropout=0.2):
+    """
+    Factory function để tạo model theo loại
+
+    Args:
+        model_type: 'rnn', 'lstm', 'bilstm'
+    """
+    models = {
+        'rnn': RNNRecommender,
+        'lstm': LSTMRecommender,
+        'bilstm': BiLSTMRecommender
+    }
+    model_class = models.get(model_type.lower(), BiLSTMRecommender)
+    return model_class(num_products, embedding_dim, hidden_dim, num_layers, dropout)
+
+
 class LSTMEngine:
     """
-    Engine quản lý LSTM model cho recommendations
+    Engine quản lý model cho recommendations
+    Hỗ trợ: RNN, LSTM, BiLSTM (mặc định BiLSTM)
     """
 
     SEQUENCE_LENGTH = 10  # Độ dài chuỗi hành vi
 
-    def __init__(self):
+    def __init__(self, model_type=None):
         self.model = None
+        self.model_type = model_type or DEFAULT_MODEL_TYPE  # Mặc định BiLSTM
         self.product_to_idx = {}
         self.idx_to_product = {}
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model_path = getattr(settings, 'MODEL_DIR', '.') / 'lstm_recommender.pt' if hasattr(settings, 'MODEL_DIR') else 'lstm_recommender.pt'
+        self.model_path = getattr(settings, 'MODEL_DIR', '.') / 'model_best.pt' if hasattr(settings, 'MODEL_DIR') else 'model_best.pt'
+        logger.info(f"LSTMEngine initialized with model_type={self.model_type}")
 
     def _build_sequences(self, interactions_df):
         """
@@ -205,13 +312,15 @@ class LSTMEngine:
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-        # Initialize model
-        self.model = LSTMRecommender(
+        # Initialize model (sử dụng BiLSTM làm mặc định - model tốt nhất)
+        self.model = get_model(
+            model_type=self.model_type,
             num_products=num_products,
             embedding_dim=64,
             hidden_dim=128,
             num_layers=2
         ).to(self.device)
+        logger.info(f"Using model: {self.model_type.upper()}")
 
         # Loss and optimizer
         criterion = nn.CrossEntropyLoss()
@@ -365,6 +474,7 @@ class LSTMEngine:
             os.makedirs(model_dir, exist_ok=True)
 
         checkpoint = {
+            'model_type': self.model_type,
             'model_state_dict': self.model.state_dict(),
             'product_to_idx': self.product_to_idx,
             'idx_to_product': self.idx_to_product,
@@ -373,7 +483,7 @@ class LSTMEngine:
             'hidden_dim': self.model.hidden_dim
         }
         torch.save(checkpoint, self.model_path)
-        logger.info(f"Model saved to {self.model_path}")
+        logger.info(f"Model ({self.model_type}) saved to {self.model_path}")
 
     def _load_model(self):
         """Load model từ file"""
@@ -387,7 +497,11 @@ class LSTMEngine:
             self.product_to_idx = checkpoint['product_to_idx']
             self.idx_to_product = checkpoint['idx_to_product']
 
-            self.model = LSTMRecommender(
+            # Load model type from checkpoint hoặc dùng mặc định
+            saved_model_type = checkpoint.get('model_type', 'bilstm')
+
+            self.model = get_model(
+                model_type=saved_model_type,
                 num_products=checkpoint['num_products'],
                 embedding_dim=checkpoint['embedding_dim'],
                 hidden_dim=checkpoint['hidden_dim']
@@ -396,11 +510,11 @@ class LSTMEngine:
             self.model.load_state_dict(checkpoint['model_state_dict'])
             self.model.eval()
 
-            logger.info("LSTM model loaded successfully")
+            logger.info(f"{saved_model_type.upper()} model loaded successfully")
         except Exception as e:
-            logger.error(f"Error loading LSTM model: {e}")
+            logger.error(f"Error loading model: {e}")
             self.model = None
 
 
-# Singleton instance
-lstm_engine = LSTMEngine()
+# Singleton instance - sử dụng BiLSTM (model tốt nhất)
+lstm_engine = LSTMEngine(model_type='bilstm')

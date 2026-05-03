@@ -1,7 +1,8 @@
 import { Routes, Route } from 'react-router-dom';
 import { useEffect } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { checkAuth } from './store/slices/authSlice';
+import { fetchWishlist } from './store/slices/wishlistSlice';
 
 // Layout
 import MainLayout from './components/layout/MainLayout';
@@ -26,10 +27,18 @@ import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
   const dispatch = useDispatch();
+  const { isAuthenticated } = useSelector((state) => state.auth);
 
   useEffect(() => {
     dispatch(checkAuth());
   }, [dispatch]);
+
+  // Fetch wishlist when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      dispatch(fetchWishlist());
+    }
+  }, [dispatch, isAuthenticated]);
 
   return (
     <>

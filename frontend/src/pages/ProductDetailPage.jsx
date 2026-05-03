@@ -3,8 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchProductById, clearCurrentProduct } from '../store/slices/productSlice';
 import { addToCart } from '../store/slices/cartSlice';
+import { addToWishlist, removeFromWishlist } from '../store/slices/wishlistSlice';
+import { setLoginModalOpen } from '../store/slices/uiSlice';
 import Loading from '../components/common/Loading';
-import { StarIcon, ShoppingCartIcon, HeartIcon, MinusIcon, PlusIcon, TruckIcon, ShieldCheckIcon } from '@heroicons/react/24/solid';
+import ProductRecommendations from '../components/product/ProductRecommendations';
+import { StarIcon, ShoppingCartIcon, MinusIcon, PlusIcon, TruckIcon, ShieldCheckIcon } from '@heroicons/react/24/solid';
+import { HeartIcon as HeartOutline } from '@heroicons/react/24/outline';
+import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
 import { formatPrice } from '../utils/format';
 import toast from 'react-hot-toast';
 
@@ -16,6 +21,10 @@ const ProductDetailPage = () => {
   const [selectedImage, setSelectedImage] = useState(0);
 
   const { currentProduct: product, loading } = useSelector((state) => state.product);
+  const { isAuthenticated } = useSelector((state) => state.auth);
+  const { productIds: wishlistIds } = useSelector((state) => state.wishlist);
+
+  const isInWishlist = product ? wishlistIds.includes(product.id) : false;
 
   useEffect(() => {
     dispatch(fetchProductById(id));
@@ -25,6 +34,10 @@ const ProductDetailPage = () => {
   }, [dispatch, id]);
 
   const handleAddToCart = () => {
+    if (!isAuthenticated) {
+      dispatch(setLoginModalOpen(true));
+      return;
+    }
     dispatch(addToCart({ productId: product.id, quantity }))
       .unwrap()
       .then(() => toast.success('Đã thêm vào giỏ hàng'))
@@ -32,10 +45,32 @@ const ProductDetailPage = () => {
   };
 
   const handleBuyNow = () => {
+    if (!isAuthenticated) {
+      dispatch(setLoginModalOpen(true));
+      return;
+    }
     dispatch(addToCart({ productId: product.id, quantity }))
       .unwrap()
       .then(() => navigate('/cart'))
       .catch((err) => toast.error(err));
+  };
+
+  const handleToggleWishlist = () => {
+    if (!isAuthenticated) {
+      dispatch(setLoginModalOpen(true));
+      return;
+    }
+    if (isInWishlist) {
+      dispatch(removeFromWishlist(product.id))
+        .unwrap()
+        .then(() => toast.success('Da xoa khoi yeu thich'))
+        .catch((err) => toast.error(err));
+    } else {
+      dispatch(addToWishlist(product.id))
+        .unwrap()
+        .then(() => toast.success('Da them vao yeu thich'))
+        .catch((err) => toast.error(err));
+    }
   };
 
   if (loading || !product) {
@@ -139,8 +174,15 @@ const ProductDetailPage = () => {
             <button onClick={handleBuyNow} className="btn-primary flex-1">
               Mua ngay
             </button>
-            <button className="btn-secondary p-3">
-              <HeartIcon className="w-5 h-5 text-gray-400" />
+            <button
+              onClick={handleToggleWishlist}
+              className={`btn-secondary p-3 ${isInWishlist ? 'text-red-500 border-red-500' : ''}`}
+            >
+              {isInWishlist ? (
+                <HeartSolid className="w-5 h-5" />
+              ) : (
+                <HeartOutline className="w-5 h-5 text-gray-400" />
+              )}
             </button>
           </div>
 
@@ -160,10 +202,29 @@ const ProductDetailPage = () => {
 
       {/* Description */}
       <div className="mt-12">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Mô tả sản phẩm</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Mo ta san pham</h2>
         <div className="card p-6 prose max-w-none">
           <p className="text-gray-700 whitespace-pre-line">{product.description}</p>
         </div>
+      </div>
+
+      {/* AI Recommendations - Similar Products */}
+      <div className="mt-12 border-t border-gray-200">
+        <ProductRecommendations
+          productId={product.id}
+          type="similar"
+          title="San pham tuong tu"
+          limit={6}
+        />
+      </div>
+
+      {/* Trending Products */}
+      <div className="border-t border-gray-200">
+        <ProductRecommendations
+          type="trending"
+          title="San pham ban chay"
+          limit={6}
+        />
       </div>
     </div>
   );

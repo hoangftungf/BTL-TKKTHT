@@ -1,4 +1,7 @@
+import logging
 import httpx
+import os
+from threading import Thread
 from django.conf import settings
 from rest_framework import status
 from rest_framework.views import APIView
@@ -6,6 +9,31 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import Cart, CartItem
 from .serializers import CartSerializer, CartItemSerializer
+
+logger = logging.getLogger(__name__)
+
+
+def track_behavior(user_id, action, product_id=None, metadata=None):
+    """Send tracking request to recommendation service (async)."""
+    if not user_id:
+        return
+
+    def _send():
+        try:
+            url = os.environ.get('RECOMMENDATION_SERVICE_URL', 'http://ai-recommendation:8008')
+            payload = {
+                'user_id': str(user_id),
+                'action': action,
+                'product_id': str(product_id) if product_id else None,
+                'metadata': metadata or {},
+            }
+            httpx.post(f"{url}/track/", json=payload, timeout=5.0)
+        except Exception as e:
+            logger.warning(f"Tracking error: {e}")
+
+    thread = Thread(target=_send)
+    thread.daemon = True
+    thread.start()
 
 
 class HealthCheckView(APIView):
@@ -65,6 +93,18 @@ class CartItemView(APIView):
             item.quantity += quantity
             item.save()
 
+        # Track add_to_cart behavior
+        track_behavior(
+            user_id=request.user.id,
+            action='add_to_cart',
+            product_id=product_id,
+            metadata={
+                'quantity': quantity,
+                'product_name': product.get('name', ''),
+                'price': product.get('price', 0),
+            }
+        )
+
         return Response(CartItemSerializer(item).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
     def put(self, request, pk):
@@ -76,7 +116,18 @@ class CartItemView(APIView):
 
         quantity = int(request.data.get('quantity', item.quantity))
         if quantity <= 0:
+            product_id = item.product_id
+            product_name = item.product_name
             item.delete()
+
+            # Track remove_from_cart behavior
+            track_behavior(
+                user_id=request.user.id,
+                action='remove_from_cart',
+                product_id=product_id,
+                metadata={'product_name': product_name}
+            )
+
             return Response({'message': 'Đã xóa sản phẩm khỏi giỏ hàng'})
 
         item.quantity = quantity
@@ -87,7 +138,19 @@ class CartItemView(APIView):
         cart, _ = Cart.objects.get_or_create(user_id=request.user.id)
         try:
             item = CartItem.objects.get(pk=pk, cart=cart)
+            product_id = item.product_id
+            product_name = item.product_name
+
             item.delete()
+
+            # Track remove_from_cart behavior
+            track_behavior(
+                user_id=request.user.id,
+                action='remove_from_cart',
+                product_id=product_id,
+                metadata={'product_name': product_name}
+            )
+
             return Response({'message': 'Đã xóa sản phẩm khỏi giỏ hàng'})
         except CartItem.DoesNotExist:
             return Response({'error': 'Không tìm thấy sản phẩm trong giỏ hàng'}, status=status.HTTP_404_NOT_FOUND)
