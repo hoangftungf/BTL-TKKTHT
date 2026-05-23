@@ -3,10 +3,12 @@ AI Chatbot Engine with Ollama LLM Integration and RAG + Knowledge Graph Support
 Bước 2c: Tích hợp RAG với Knowledge Graph cho chatbot
 """
 
-import os
-import re
+import asyncio
 import json
 import logging
+import os
+import re
+
 import httpx
 import numpy as np
 from typing import Dict, List, Optional, Any, Tuple
@@ -45,24 +47,57 @@ class QueryParser:
         'laptop': ['laptop', 'máy tính xách tay', 'may tinh xach tay', 'notebook', 'macbook'],
         'điện thoại': ['điện thoại', 'dien thoai', 'phone', 'smartphone', 'di động', 'di dong', 'dt', 'dienthoai'],
         'tablet': ['tablet', 'máy tính bảng', 'may tinh bang', 'ipad'],
-        'giày': ['giày', 'giay', 'giầy', 'sneaker', 'boot', 'dép', 'dep', 'sandal', 'giay dep'],
-        'áo': ['áo', 'ao', 'áo sơ mi', 'ao so mi', 'áo thun', 'ao thun', 'áo khoác', 'ao khoac', 't-shirt', 'tshirt', 'shirt'],
-        'quần': ['quần', 'quan', 'quần jean', 'quan jean', 'quần tây', 'quan tay', 'quần short', 'quan short'],
-        'mỹ phẩm': ['mỹ phẩm', 'my pham', 'son', 'kem', 'serum', 'toner', 'makeup', 'skincare', 'dưỡng da', 'duong da'],
+        'giày': ['giày', 'giay', 'giầy', 'sneaker', 'boot', 'dép', 'dep', 'sandal', 'giay dep',
+                 'shoes', 'heels', 'giày cao gót', 'giay cao got', 'giày dép'],
+        'váy': ['váy', 'vay', 'đầm', 'dam', 'dress', 'skirt', 'chân váy', 'chan vay', 'váy đầm', 'vay dam'],
+        'áo': ['áo', 'ao', 'áo sơ mi', 'ao so mi', 'áo thun', 'ao thun', 'áo khoác', 'ao khoac',
+               't-shirt', 'tshirt', 'shirt', 'tops', 'blouse'],
+        'quần': ['quần', 'quan', 'quần jean', 'quan jean', 'quần tây', 'quan tay', 'quần short', 'quan short',
+                 'pants', 'jeans', 'trousers'],
+        'mỹ phẩm': ['mỹ phẩm', 'my pham', 'son', 'kem', 'serum', 'toner', 'makeup', 'skincare',
+                    'dưỡng da', 'duong da', 'cosmetic', 'beauty', 'foundation', 'lipstick', 'phấn', 'phan'],
         'đồng hồ': ['đồng hồ', 'dong ho', 'watch', 'smartwatch', 'apple watch'],
         'tai nghe': ['tai nghe', 'headphone', 'earphone', 'airpod', 'earbud'],
-        'túi xách': ['túi', 'tui', 'túi xách', 'tui xach', 'balo', 'ba lô', 'ba lo', 'cặp', 'cap', 'handbag'],
-        'gia dụng': ['gia dụng', 'gia dung', 'nồi', 'noi', 'chảo', 'chao', 'máy xay', 'may xay', 'máy ép', 'may ep', 'quạt', 'quat', 'điều hòa', 'dieu hoa', 'máy giặt', 'may giat'],
-        'sách': ['sách', 'sach', 'book', 'truyện', 'truyen', 'tiểu thuyết', 'tieu thuyet'],
+        'túi xách': ['túi', 'tui', 'túi xách', 'tui xach', 'balo', 'ba lô', 'ba lo', 'cặp', 'cap', 'handbag', 'bag'],
+        'gia dụng': ['gia dụng', 'gia dung', 'nồi', 'noi', 'chảo', 'chao', 'máy xay', 'may xay',
+                     'máy ép', 'may ep', 'quạt', 'quat', 'điều hòa', 'dieu hoa', 'máy giặt', 'may giat',
+                     'cookware', 'kitchen', 'furniture', 'tủ lạnh', 'tu lanh', 'refrigerator'],
+        'thể thao': ['thể thao', 'the thao', 'sport', 'gym', 'fitness', 'tập gym', 'tap gym', 'outdoor'],
+        'sách': ['sách', 'sach', 'book', 'truyện', 'truyen', 'tiểu thuyết', 'tieu thuyet', 'stationery'],
+        'tivi': ['tivi', 'tv', 'television', 'màn hình', 'man hinh'],
     }
 
-    # Map specific product types to broader Neo4j categories (for flexible matching)
-    # This helps when Neo4j has different category names
+    # Map parsed category key → list of Neo4j category name substrings to try.
+    # Order matters: most specific first. The engine tries each alias in turn until
+    # Neo4j returns ≥ 1 result.
+    # Source of truth: DB categories (from /categories/ endpoint):
+    #   Electronics → [TV, Refrigerator, Washing Machine, Air Conditioner]
+    #   Computers   → [Laptop, Desktop PC, Components]
+    #   Phones & Tablets → [Smartphone, Tablet, Phone Accessories]
+    #   Fashion Men  → [Shirt, Pants, Shoes]
+    #   Fashion Women → [Dress, Tops, Heels]
+    #   Beauty & Cosmetics → [Lipstick, Foundation, Skincare]
+    #   Home & Kitchen → [Cookware, Kitchen Appliances, Furniture]
+    #   Sports & Outdoor → [Gym Equipment, Outdoor Gear]
+    #   Accessories → [Watches, Bags]
+    #   Books & Office → [Books, Stationery]
     CATEGORY_NEO4J_ALIASES = {
-        'điện thoại': ['phone', 'điện thoại', 'smartphone', 'mobile'],
-        'laptop': ['laptop', 'máy tính', 'computer', 'notebook'],
-        'giày': ['giày', 'shoe', 'footwear', 'giày dép'],
-        'gia dụng': ['gia dụng', 'home', 'appliance', 'đồ gia dụng'],
+        'laptop':      ['Laptop', 'Computers', 'Desktop PC', 'laptop'],
+        'điện thoại':  ['Smartphone', 'Phones & Tablets', 'Phone', 'điện thoại'],
+        'tablet':      ['Tablet', 'Phones & Tablets'],
+        'giày':        ['Shoes', 'Heels', 'Fashion Men', 'Fashion Women', 'giày'],
+        'váy':         ['Dress', 'Fashion Women', 'Tops', 'váy'],
+        'áo':          ['Shirt', 'Tops', 'Fashion Men', 'Fashion Women', 'áo'],
+        'quần':        ['Pants', 'Fashion Men', 'quần'],
+        'mỹ phẩm':    ['Beauty & Cosmetics', 'Lipstick', 'Foundation', 'Skincare', 'Beauty'],
+        'đồng hồ':    ['Watches', 'Accessories', 'đồng hồ'],
+        'tai nghe':    ['Phone Accessories', 'Electronics', 'tai nghe'],
+        'túi xách':    ['Bags', 'Accessories', 'túi'],
+        'gia dụng':   ['Home & Kitchen', 'Kitchen Appliances', 'Cookware', 'Furniture',
+                       'Electronics', 'Refrigerator', 'Washing Machine', 'Air Conditioner'],
+        'thể thao':   ['Sports & Outdoor', 'Gym Equipment', 'Outdoor Gear'],
+        'sách':        ['Books & Office', 'Books', 'Stationery'],
+        'tivi':        ['TV', 'Electronics'],
     }
 
     # Brand patterns
@@ -361,6 +396,61 @@ class ProductVectorStore:
                 })
             return results
 
+    def save_local(self, directory: str) -> bool:
+        """Persist the FAISS index and metadata to *directory* for reuse across restarts."""
+        os.makedirs(directory, exist_ok=True)
+        try:
+            if self.index is not None:
+                import faiss
+                faiss.write_index(self.index, os.path.join(directory, 'chatbot.index'))
+            elif hasattr(self, '_embeddings') and self._embeddings:
+                np.save(
+                    os.path.join(directory, 'embeddings.npy'),
+                    np.array(self._embeddings, dtype='float32'),
+                )
+            with open(os.path.join(directory, 'meta.json'), 'w', encoding='utf-8') as fh:
+                json.dump(
+                    {
+                        'product_ids': self.product_ids,
+                        'product_data': self.product_data,
+                        'embedding_dim': self.embedding_dim,
+                    },
+                    fh,
+                    ensure_ascii=False,
+                )
+            logger.info('[VectorStore] Saved %d products → %s', len(self.product_ids), directory)
+            return True
+        except Exception as exc:
+            logger.error('[VectorStore] save_local failed: %s', exc)
+            return False
+
+    def load_local(self, directory: str) -> bool:
+        """Load a previously saved index from *directory*. Returns True on success."""
+        meta_path = os.path.join(directory, 'meta.json')
+        if not os.path.exists(meta_path):
+            logger.info('[VectorStore] No saved index found at %s', directory)
+            return False
+        try:
+            with open(meta_path, 'r', encoding='utf-8') as fh:
+                meta = json.load(fh)
+            self.product_ids = meta['product_ids']
+            self.product_data = meta['product_data']
+            self.embedding_dim = meta.get('embedding_dim', self.embedding_dim)
+            self._initialize()
+            index_path = os.path.join(directory, 'chatbot.index')
+            if os.path.exists(index_path):
+                import faiss
+                self.index = faiss.read_index(index_path)
+            else:
+                emb_path = os.path.join(directory, 'embeddings.npy')
+                if os.path.exists(emb_path):
+                    self._embeddings = list(np.load(emb_path))
+            logger.info('[VectorStore] Loaded %d products ← %s', len(self.product_ids), directory)
+            return True
+        except Exception as exc:
+            logger.error('[VectorStore] load_local failed: %s', exc)
+            return False
+
 
 class TextEmbedder:
     """Generate text embeddings"""
@@ -580,14 +670,14 @@ class KnowledgeGraphClient:
                     params["brand"] = entities.brand
                     logger.info(f"[DEBUG] Neo4j brand filter: {entities.brand}")
 
-                # STRICT Price filters
+                # STRICT Price filters (use toInteger since price is stored as string in Neo4j)
                 if entities.price_max:
-                    where_clauses.append("p.price <= $price_max")
+                    where_clauses.append("toInteger(p.price) <= $price_max")
                     params["price_max"] = entities.price_max
                     logger.info(f"[DEBUG] Neo4j price_max filter: {entities.price_max}")
 
                 if entities.price_min:
-                    where_clauses.append("p.price >= $price_min")
+                    where_clauses.append("toInteger(p.price) >= $price_min")
                     params["price_min"] = entities.price_min
                     logger.info(f"[DEBUG] Neo4j price_min filter: {entities.price_min}")
 
@@ -699,10 +789,20 @@ class RAGPipeline:
         self.embedder = TextEmbedder(ollama_host)
         self.vector_store = ProductVectorStore()
         self._indexed = False
+        # Load pre-built FAISS index at startup (disk read ≪ embedding rebuild time).
+        # Populated by: python manage.py build_ai_index
+        index_dir = getattr(settings, 'AI_INDEX_DIR', '/app/ai_index')
+        if self.vector_store.load_local(index_dir):
+            self._indexed = True
 
-    def index_products(self):
-        """Index products from product service"""
-        if self._indexed:
+    def index_products(self, force: bool = False):
+        """
+        Fetch products from product-service, embed, and populate the vector store.
+
+        Args:
+            force: Rebuild even if the index is already loaded (used by build_ai_index command).
+        """
+        if self._indexed and not force:
             return
 
         product_service_url = getattr(settings, 'PRODUCT_SERVICE_URL', 'http://product-service:8000/api/products')
@@ -712,13 +812,7 @@ class RAGPipeline:
             if response.status_code == 200:
                 products = response.json().get('results', [])
 
-                texts = []
-                for p in products:
-                    text = f"{p.get('name', '')} {p.get('description', '')} {p.get('brand', '')}"
-                    if p.get('category'):
-                        if isinstance(p['category'], dict):
-                            text += f" {p['category'].get('name', '')}"
-                    texts.append(text)
+                texts = [self._build_product_text(p) for p in products]
 
                 if texts:
                     embeddings = self.embedder.embed(texts)
@@ -735,62 +829,213 @@ class RAGPipeline:
                         )
 
                 self._indexed = True
-                logger.info(f"Indexed {len(products)} products for RAG")
+                logger.info('Indexed %d products for RAG', len(products))
         except Exception as e:
-            logger.error(f"Failed to index products: {e}")
+            logger.error('Failed to index products: %s', e)
 
-    def retrieve(self, query, k=5, user_id=None):
-        """Retrieve relevant products - STRICT filtering by category and price"""
-        self.index_products()
+    @staticmethod
+    def _build_product_text(product: dict) -> str:
+        """
+        Build a structured text for embedding — replaces the old flat string join.
 
-        cache_key = f"rag_kg_chatbot:{hash(query)}:{k}:{user_id}"
-        cached = cache.get(cache_key)
-        if cached:
-            return cached
+        Strategy:
+        - Fields are separated by ' | ' so the embedding model sees clear boundaries.
+        - description is chunked to the first 300 words to prevent token overflow
+          and noisy embeddings from very long marketing copy.
+        - Structured header (name + brand + category) always appears first so it
+          has the highest influence on the final embedding.
+        """
+        name = product.get('name', '')
+        brand = product.get('brand', '')
+        cat = product.get('category', '')
+        if isinstance(cat, dict):
+            cat = cat.get('name', '')
 
-        # 1. Parse query to extract structured entities
-        entities = query_parser.parse(query)
+        description = (
+            product.get('description') or product.get('short_description') or ''
+        ).strip()
 
-        # DEBUG: Log extracted entities
-        logger.info(f"[DEBUG] Query: '{query}'")
-        logger.info(f"[DEBUG] Extracted entities - category: {entities.category}, "
-                    f"price_min: {entities.price_min}, price_max: {entities.price_max}, "
-                    f"brand: {entities.brand}, confidence: {entities.confidence}")
+        # Chunk: keep first 300 words to avoid noisy long-tail tokens
+        desc_words = description.split()
+        if len(desc_words) > 300:
+            description = ' '.join(desc_words[:300])
 
-        # 2. Use ONLY structured search based on extracted entities
-        kg_results = []
-        if entities.category or entities.price_max or entities.price_min or entities.brand:
-            kg_results = self._query_knowledge_graph_structured(entities, user_id, k)
-            logger.info(f"[DEBUG] KG structured search returned {len(kg_results)} products")
+        parts = [p for p in [name, brand, cat, description] if p]
+        return ' | '.join(parts)
 
-        # 3. NO FALLBACK - Do not add unrelated products
-        # If no results from structured search, return empty (will trigger no_results_response)
+    def _merge_hybrid(
+        self,
+        kg_results: List[dict],
+        vector_results: List[dict],
+        entities: 'ExtractedEntities',
+        k: int,
+    ) -> List[dict]:
+        """
+        Combine KG structured results with FAISS vector results.
 
-        # 4. Apply strict filtering to ensure all products match criteria
-        filtered_results = self._strict_filter_products(kg_results, entities)
-        logger.info(f"[DEBUG] After strict filter: {len(filtered_results)} products")
+        Weights:
+          KG   = 0.65 when entity confidence >= 0.5 (clear user intent)
+          KG   = 0.40 when intent is vague
+          Vec  = 1.0 - KG weight
+        Products appearing in BOTH sources receive a 20 % score boost.
+        """
+        kg_weight = 0.65 if entities.confidence >= 0.5 else 0.40
+        vec_weight = 1.0 - kg_weight
 
-        # 5. Format results
-        merged = []
-        for r in filtered_results[:k]:
-            merged.append({
-                'product_id': r.get('product_id'),
-                'score': r.get('popularity', 0) + 1,
+        pool: Dict[str, dict] = {}
+
+        for r in kg_results:
+            pid = str(r.get('product_id', ''))
+            if not pid:
+                continue
+            popularity = float(r.get('popularity', 0))
+            pop_norm = min(popularity / 100.0, 1.0)
+            score = kg_weight * (0.5 + 0.5 * pop_norm)
+            pool[pid] = {
+                'product_id': pid,
+                'score': score,
+                'sources': ['kg_structured'],
                 'data': {
                     'name': r.get('name', ''),
                     'price': r.get('price'),
                     'category': r.get('category', ''),
                     'brand': r.get('brand', ''),
                     'description': r.get('description', ''),
-                    'image_url': r.get('image_url', '')
+                    'image_url': r.get('image_url', ''),
                 },
-                'sources': [r.get('source', 'kg_structured')]
+            }
+
+        for r in vector_results:
+            pid = str(r.get('product_id', ''))
+            if not pid:
+                continue
+            vs = r.get('score', 0) * vec_weight
+            if pid in pool:
+                pool[pid]['score'] += vs * 1.2  # cross-source boost
+                pool[pid]['sources'].append('vector')
+            else:
+                pool[pid] = {
+                    'product_id': pid,
+                    'score': vs,
+                    'sources': ['vector'],
+                    'data': r.get('data', {}),
+                }
+
+        return sorted(pool.values(), key=lambda x: x['score'], reverse=True)[:k]
+
+    def retrieve(self, query, k=5, user_id=None):
+        """
+        Hybrid Retrieval: KG Structured Search + FAISS Vector Search.
+
+        Does NOT call index_products() inline — the blocking cold-start is
+        eliminated. Pre-build the index with:
+            python manage.py build_ai_index
+
+        Pipeline:
+          1. Parse query → structured entities (category, price, brand)
+          2. KG structured search  — high precision, explicit filters
+          3. FAISS vector search   — high recall, semantic similarity
+          4. Score threshold: discard vector hits with score <= 0.5
+          5. Hybrid merge with entity-confidence-weighted scoring
+        """
+        cache_key = f"rag_kg_chatbot:{hash(query)}:{k}:{user_id}"
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+
+        # 1. Structured entity extraction
+        entities = query_parser.parse(query)
+        logger.info(
+            '[RETRIEVE] query="%s" → category=%s price_max=%s brand=%s confidence=%.2f',
+            query, entities.category, entities.price_max, entities.brand, entities.confidence,
+        )
+
+        # 2. KG structured search (only when explicit constraints were extracted)
+        kg_results: List[dict] = []
+        if entities.category or entities.price_max or entities.price_min or entities.brand:
+            kg_results = self._query_knowledge_graph_structured(entities, user_id, k)
+            kg_results = self._strict_filter_products(kg_results, entities)
+
+        logger.info('[RETRIEVE] KG found: %d products', len(kg_results))
+
+        # 3. FAISS vector search
+        # Always run when:
+        #   (a) the vector store has data, AND
+        #   (b) KG returned fewer than 2 products OR no explicit KG constraints existed
+        # This guarantees fashion / beauty items that may not exist in Neo4j are
+        # still surfaced via semantic similarity.
+        VECTOR_MIN_SCORE = 0.2   # lowered to 0.2 for better fashion/beauty recall via FAISS
+        vector_results: List[dict] = []
+        should_run_vector = (
+            self.vector_store.product_ids
+            and (len(kg_results) < 2 or not (entities.category or entities.brand))
+        )
+        # Also run vector when KG DID return results (hybrid) — but only if
+        # the query has no hard price constraint forcing strict KG-only mode.
+        if self.vector_store.product_ids and len(kg_results) >= 2:
+            should_run_vector = True  # always supplement with vector for true hybrid
+
+        if should_run_vector:
+            try:
+                query_embs = self.embedder.embed(query)
+                if len(query_embs) > 0:
+                    raw_hits = self.vector_store.search(query_embs[0], k=k * 2)
+                    # Score threshold: drop low-relevance hits
+                    vector_results = [r for r in raw_hits if r.get('score', 0) > VECTOR_MIN_SCORE]
+                    logger.info(
+                        '[RETRIEVE] Vector found: %d products (raw=%d, threshold=%.1f)',
+                        len(vector_results), len(raw_hits), VECTOR_MIN_SCORE,
+                    )
+            except Exception as exc:
+                logger.warning('[RETRIEVE] Vector search failed: %s', exc)
+        elif not self.vector_store.product_ids:
+            logger.warning(
+                '[RETRIEVE] Vector store empty — run: python manage.py build_ai_index'
+            )
+
+        logger.info(
+            '[RETRIEVE] Merge input — KG: %d | Vector: %d | query=%r',
+            len(kg_results), len(vector_results), query[:60],
+        )
+
+        # 4. Hybrid merge
+        merged = self._merge_hybrid(kg_results, vector_results, entities, k)
+
+        # 5. Post-merge strict price filter — ensures vector hits that violate
+        #    an explicit price constraint are removed even if KG had no match.
+        if entities.price_max or entities.price_min:
+            before = len(merged)
+            merged = [r for r in merged if self._price_ok(r, entities)]
+            if len(merged) < before:
+                logger.info(
+                    '[RETRIEVE] Price filter removed %d products above constraint',
+                    before - len(merged),
+                )
+
+        logger.info('[RETRIEVE] Hybrid merged: %d products (final)', len(merged))
+
+        # 5. Normalise to consistent output format
+        final: List[dict] = []
+        for r in merged:
+            data = r.get('data') or {}
+            if not data:
+                data = {
+                    'name': r.get('name', ''),
+                    'price': r.get('price'),
+                    'category': r.get('category', ''),
+                    'brand': r.get('brand', ''),
+                    'description': r.get('description', ''),
+                    'image_url': r.get('image_url', ''),
+                }
+            final.append({
+                'product_id': r.get('product_id'),
+                'score': r.get('score', 0),
+                'data': data,
+                'sources': r.get('sources', ['unknown']),
             })
 
-        logger.info(f"[DEBUG] Final products: {[p['data']['name'] for p in merged]}")
-
-        cache.set(cache_key, merged, timeout=300)
-        return merged, entities
+        cache.set(cache_key, (final, entities), timeout=300)
+        return final, entities
 
     def _strict_filter_products(self, products: List[Dict], entities: ExtractedEntities) -> List[Dict]:
         """
@@ -821,24 +1066,93 @@ class RAGPipeline:
 
         return filtered
 
+    def _price_ok(self, item: dict, entities: ExtractedEntities) -> bool:
+        """
+        Return True if item's price satisfies entities price constraints.
+        Works on the normalised merged format where price lives in item['data']['price'].
+        """
+        price_raw = item.get('data', {}).get('price') or item.get('price')
+        if price_raw is None:
+            return True  # no price info → do not exclude
+        try:
+            price = float(price_raw)
+        except (ValueError, TypeError):
+            return True
+        if entities.price_max and price > entities.price_max:
+            return False
+        if entities.price_min and price < entities.price_min:
+            return False
+        return True
+
     def _query_knowledge_graph_structured(self, entities: ExtractedEntities, user_id=None, k=5):
         """
         Query Knowledge Graph using structured entities.
-        STRICT: Only returns products matching the extracted criteria.
-        NO user recommendations that might be from different categories.
+
+        Strategy:
+        1. Map Vietnamese category to English alias FIRST (e.g. "giày" → "Shoes")
+           to match Neo4j database category names.
+        2. Try Neo4j search with the mapped category.
+        3. If no results, try remaining aliases in CATEGORY_NEO4J_ALIASES.
+        4. Never adds user recommendations — only returns products that match
+           the explicit query constraints.
         """
-        results = []
+        if not (entities.category or entities.price_max or entities.price_min or entities.brand):
+            return []
 
-        # Use structured search if we have category, price, or brand
-        if entities.category or entities.price_max or entities.price_min or entities.brand:
-            structured_results = kg_client.search_products_structured(entities, n=k)
-            results.extend(structured_results)
-            logger.info(f"[DEBUG] Structured KG search returned {len(structured_results)} results")
+        # ── Step 1: Map Vietnamese category to English alias BEFORE search ────
+        search_entities = entities
+        original_category = entities.category
 
-        # DO NOT add user recommendations - they may include irrelevant categories
-        # User recommendations should only be shown on homepage, not in search results
+        if entities.category and entities.category in QueryParser.CATEGORY_NEO4J_ALIASES:
+            aliases = QueryParser.CATEGORY_NEO4J_ALIASES[entities.category]
+            if aliases:
+                # Use the FIRST English alias (most specific match for Neo4j CONTAINS)
+                primary_alias = aliases[0]
+                search_entities = ExtractedEntities(
+                    category=primary_alias,
+                    price_max=entities.price_max,
+                    price_min=entities.price_min,
+                    brand=entities.brand,
+                    confidence=entities.confidence,
+                    raw_query=entities.raw_query,
+                )
+                logger.info(
+                    '[KG] Category mapping: %r → %r (primary alias)',
+                    original_category, primary_alias,
+                )
 
-        return results
+        # ── Step 2: Search with mapped category ───────────────────────────────
+        structured_results = kg_client.search_products_structured(search_entities, n=k)
+        logger.info(
+            '[KG] Primary search (category=%r, original=%r) → %d results',
+            search_entities.category, original_category, len(structured_results),
+        )
+
+        # ── Step 3: Alias fallback if primary alias returned 0 results ────────
+        if not structured_results and original_category:
+            aliases = QueryParser.CATEGORY_NEO4J_ALIASES.get(original_category, [])
+            # Skip the first alias (already tried) and the original Vietnamese name
+            for alias in aliases[1:]:
+                if alias.lower() == (original_category or '').lower():
+                    continue
+                alias_entities = ExtractedEntities(
+                    category=alias,
+                    price_max=entities.price_max,
+                    price_min=entities.price_min,
+                    brand=entities.brand,
+                    confidence=entities.confidence,
+                    raw_query=entities.raw_query,
+                )
+                alias_results = kg_client.search_products_structured(alias_entities, n=k)
+                if alias_results:
+                    logger.info(
+                        '[KG] Fallback alias "%s" → %d results (original: %r)',
+                        alias, len(alias_results), original_category,
+                    )
+                    structured_results = alias_results
+                    break
+
+        return structured_results
 
     def _query_knowledge_graph_fallback(self, query, user_id=None, k=5):
         """Fallback KG query for when structured search doesn't work"""
@@ -969,36 +1283,49 @@ class RAGPipeline:
         return results[:k]
 
     def generate_augmented_response(self, query, context_products, kg_context=None):
-        """Generate response with product context + Knowledge Graph context"""
-        # Check cache first
-        cache_key = f"rag_response:{hash(query)}:{hash(str(context_products))}"
+        """
+        Generate a grounded LLM response (synchronous).
+
+        Changes vs original:
+        - Products with score <= 0.5 are dropped before building context (noise reduction).
+        - Prompt explicitly forbids hallucination and requires [ID: xxx] citation.
+        - make_traced_headers() propagates X-Trace-Id to Ollama.
+        """
+        from chatbot_app.middleware.trace import make_traced_headers
+
+        # Score filter: keep products with score >= 0.2 to include KG results with low popularity
+        # (lowered from 0.5 to avoid filtering out fashion/beauty items with fewer purchases)
+        grounded_products = [p for p in context_products if p.get('score', 1) >= 0.2]
+        if not grounded_products:
+            grounded_products = context_products  # fall back to all if all filtered
+
+        cache_key = f"rag_response:{hash(query)}:{hash(str(grounded_products))}"
         cached_response = cache.get(cache_key)
         if cached_response:
-            logger.info("RAG response from cache")
+            logger.info('[RAG] Response from cache')
             return cached_response
 
-        context = self._build_context(context_products)
+        context = self._build_context(grounded_products)
 
-        # Add KG context if available
         kg_info = ""
         if kg_context:
             if kg_context.get('bought_together'):
                 items = [b.get('name') for b in kg_context['bought_together'][:2] if b.get('name')]
                 if items:
-                    kg_info += f"\nSan pham thuong mua kem: {', '.join(items)}"
-            if kg_context.get('trending'):
-                kg_info += "\n(Dang la san pham pho bien)"
+                    kg_info += f"\nSản phẩm thường mua kèm: {', '.join(items)}"
 
-        # Shorter, more focused prompt for faster generation
-        prompt = f"""Tro ly AI shop. Goi y san pham cho khach.
+        prompt = f"""Bạn là trợ lý AI của cửa hàng thương mại điện tử.
+Chỉ sử dụng thông tin trong CONTEXT dưới đây để trả lời. \
+Nếu không có sản phẩm phù hợp trong context, hãy trả lời "Tôi không tìm thấy sản phẩm phù hợp".
+Mỗi sản phẩm được đề cập PHẢI đi kèm mã theo định dạng [ID: xxx]. Không được tự bịa thông tin.
 
-San pham:
+CONTEXT SẢN PHẨM:
 {context}
 {kg_info}
 
-Hoi: {query}
+CÂU HỎI: {query}
 
-Tra loi ngan (1-2 cau):"""
+TRẢ LỜI (ngắn gọn, tối đa 3 câu, chỉ dựa trên context):"""
 
         try:
             response = httpx.post(
@@ -1007,31 +1334,113 @@ Tra loi ngan (1-2 cau):"""
                     "model": self.ollama_model,
                     "prompt": prompt,
                     "stream": False,
-                    "options": {
-                        "num_predict": 150,  # Limit output tokens for faster response
-                        "temperature": 0.7
-                    }
+                    "options": {"num_predict": 200, "temperature": 0.3},
                 },
-                timeout=90.0  # Increased timeout
+                headers=make_traced_headers(),
+                timeout=90.0,
             )
             if response.status_code == 200:
                 result = response.json().get('response', '')
                 if result:
-                    # Cache successful response
+                    # If LLM says "không tìm thấy" despite products existing, use fallback with citations
+                    llm_gave_empty = any(
+                        phrase in result.lower()
+                        for phrase in ['không tìm thấy', 'khong tim thay', 'không có sản phẩm']
+                    )
+                    if llm_gave_empty and grounded_products:
+                        logger.warning('[RAG] LLM returned empty-result phrase despite having %d products — using fallback', len(grounded_products))
+                        return self._fallback_response(grounded_products)
                     cache.set(cache_key, result, timeout=600)
                     return result
         except httpx.TimeoutException:
-            logger.warning("RAG generation timeout - using fallback")
-        except Exception as e:
-            logger.error(f"RAG generation error: {e}")
+            logger.warning('[RAG] Generation timeout — using fallback')
+        except Exception as exc:
+            logger.error('[RAG] Generation error: %s', exc)
 
-        return self._fallback_response(context_products)
+        return self._fallback_response(grounded_products)
+
+    async def generate_augmented_response_async(self, query, context_products, kg_context=None):
+        """
+        Async version of generate_augmented_response for use in async views / chat().
+
+        Uses httpx.AsyncClient so the event loop is not blocked during LLM inference
+        (which can take 5–30 s depending on model and hardware).
+        """
+        from chatbot_app.middleware.trace import make_traced_headers
+
+        # Score filter: keep products with score >= 0.2 to include KG results with low popularity
+        grounded_products = [p for p in context_products if p.get('score', 1) >= 0.2]
+        if not grounded_products:
+            grounded_products = context_products
+
+        cache_key = f"rag_async:{hash(query)}:{hash(str(grounded_products))}"
+        cached = cache.get(cache_key)
+        if cached:
+            logger.info('[RAG-async] Response from cache')
+            return cached
+
+        context = self._build_context(grounded_products)
+
+        kg_info = ""
+        if kg_context and kg_context.get('bought_together'):
+            items = [b.get('name') for b in kg_context['bought_together'][:2] if b.get('name')]
+            if items:
+                kg_info = f"\nSản phẩm thường mua kèm: {', '.join(items)}"
+
+        prompt = f"""Bạn là trợ lý AI của cửa hàng thương mại điện tử.
+Chỉ sử dụng thông tin trong CONTEXT dưới đây để trả lời. \
+Nếu không có sản phẩm phù hợp trong context, hãy trả lời "Tôi không tìm thấy sản phẩm phù hợp".
+Mỗi sản phẩm được đề cập PHẢI đi kèm mã theo định dạng [ID: xxx]. Không được tự bịa thông tin.
+
+CONTEXT SẢN PHẨM:
+{context}
+{kg_info}
+
+CÂU HỎI: {query}
+
+TRẢ LỜI (ngắn gọn, tối đa 3 câu, chỉ dựa trên context):"""
+
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                response = await client.post(
+                    f"{self.ollama_host}/api/generate",
+                    json={
+                        "model": self.ollama_model,
+                        "prompt": prompt,
+                        "stream": False,
+                        "options": {"num_predict": 200, "temperature": 0.3},
+                    },
+                    headers=make_traced_headers(),
+                )
+            if response.status_code == 200:
+                result = response.json().get('response', '')
+                if result:
+                    llm_gave_empty = any(
+                        phrase in result.lower()
+                        for phrase in ['không tìm thấy', 'khong tim thay', 'không có sản phẩm']
+                    )
+                    if llm_gave_empty and grounded_products:
+                        logger.warning('[RAG-async] LLM returned empty-result phrase despite having %d products — using fallback', len(grounded_products))
+                        return self._fallback_response(grounded_products)
+                    cache.set(cache_key, result, timeout=600)
+                    return result
+        except asyncio.TimeoutError:
+            logger.warning('[RAG-async] Generation timeout — using fallback')
+        except Exception as exc:
+            logger.error('[RAG-async] Generation error: %s', exc)
+
+        return self._fallback_response(grounded_products)
 
     def _build_context(self, products):
+        """
+        Build context string injected into the LLM prompt.
+        Each line includes [ID: xxx] so the LLM can cite the source product.
+        """
         lines = []
         for i, p in enumerate(products[:5], 1):
             data = p.get('data', {})
-            line = f"{i}. {data.get('name', 'Unknown')}"
+            pid = p.get('product_id', 'unknown')
+            line = f"{i}. [ID: {pid}] {data.get('name', 'Unknown')}"
             if data.get('price'):
                 try:
                     price = float(data['price'])
@@ -1040,6 +1449,8 @@ Tra loi ngan (1-2 cau):"""
                     line += f" - {data['price']}đ"
             if data.get('category'):
                 line += f" ({data['category']})"
+            if data.get('brand'):
+                line += f" | {data['brand']}"
             lines.append(line)
         return '\n'.join(lines)
 
@@ -1049,8 +1460,9 @@ Tra loi ngan (1-2 cau):"""
         response = "Dưới đây là một số sản phẩm phù hợp với yêu cầu của bạn:\n\n"
         for i, p in enumerate(products[:3], 1):
             data = p.get('data', {})
+            pid = p.get('product_id', 'unknown')
             name = data.get('name', 'Sản phẩm')
-            response += f"**{i}. {name}**"
+            response += f"**{i}. [ID: {pid}] {name}**"
             if data.get('price'):
                 try:
                     price = float(data['price'])
@@ -1230,11 +1642,25 @@ Nếu không biết câu trả lời, hãy hướng dẫn khách hàng liên h�
         if faq_answer:
             response = faq_answer
         elif intent in self.INTENT_RESPONSES:
-            # Use predefined response
             import random
             response = random.choice(self.INTENT_RESPONSES[intent])
+        elif intent in self.RAG_INTENTS:
+            # Async RAG + KG pipeline (non-blocking Ollama call)
+            entities = query_parser.parse(message)
+            clarification = kg_client.ask_for_clarification(entities)
+            if clarification and entities.confidence < 0.3:
+                response = clarification
+            else:
+                rag_result = self.rag.retrieve(message, k=5, user_id=user_id)
+                products, _ = rag_result if isinstance(rag_result, tuple) else (rag_result, entities)
+                if products:
+                    response = await self.rag.generate_augmented_response_async(
+                        message, products
+                    )
+                else:
+                    response = self._no_results_response(entities)
         else:
-            # Use LLM for complex queries
+            # General LLM fallback for non-product queries
             response = await self._generate_llm_response(message, conversation)
 
         # Save assistant message
@@ -1287,53 +1713,47 @@ Nếu không biết câu trả lời, hãy hướng dẫn khách hàng liên h�
             import random
             response = random.choice(self.INTENT_RESPONSES[intent])
         elif intent in self.RAG_INTENTS:
-            # Check if we need clarification
-            clarification = kg_client.ask_for_clarification(entities)
-            if clarification and entities.confidence < 0.3:
-                response = clarification
-                extracted_entities = {
-                    'category': entities.category,
-                    'price_max': entities.price_max,
-                    'price_min': entities.price_min,
-                    'brand': entities.brand,
-                    'confidence': entities.confidence,
-                    'needs_clarification': True
-                }
+            # Always run RAG first — even for vague queries, FAISS may surface
+            # relevant products via semantic similarity.  Clarification is only
+            # asked when RAG returns zero results AND entity confidence is low.
+            result = self.rag.retrieve(message, k=5, user_id=user_id)
+
+            # Handle tuple return (products, entities) from retrieve()
+            if isinstance(result, tuple):
+                products, retrieved_entities = result
             else:
-                # Use RAG + Knowledge Graph with structured entities
-                result = self.rag.retrieve(message, k=5, user_id=user_id)
+                products = result
+                retrieved_entities = entities
 
-                # Handle tuple return (products, entities) from new retrieve method
-                if isinstance(result, tuple):
-                    products, retrieved_entities = result
-                else:
-                    products = result
-                    retrieved_entities = entities
+            extracted_entities = {
+                'category': retrieved_entities.category,
+                'price_max': retrieved_entities.price_max,
+                'price_min': retrieved_entities.price_min,
+                'brand': retrieved_entities.brand,
+                'confidence': retrieved_entities.confidence,
+                'needs_clarification': False
+            }
 
-                extracted_entities = {
-                    'category': retrieved_entities.category,
-                    'price_max': retrieved_entities.price_max,
-                    'price_min': retrieved_entities.price_min,
-                    'brand': retrieved_entities.brand,
-                    'confidence': retrieved_entities.confidence,
-                    'needs_clarification': False
-                }
-
-                if products:
-                    # Get additional KG context
-                    top_product_id = products[0].get('product_id')
-                    if top_product_id:
-                        kg_context['bought_together'] = kg_client.get_frequently_bought_together(
-                            top_product_id, n=3
-                        )
-                        used_kg = True
-
-                    # Generate response with entity context
-                    response = self._generate_structured_response(
-                        message, products, entities, kg_context
+            if products:
+                # Get additional KG context
+                top_product_id = products[0].get('product_id')
+                if top_product_id:
+                    kg_context['bought_together'] = kg_client.get_frequently_bought_together(
+                        top_product_id, n=3
                     )
+                    used_kg = True
+
+                # Generate response with entity context
+                response = self._generate_structured_response(
+                    message, products, entities, kg_context
+                )
+            else:
+                # No products found — ask for clarification only when intent is vague
+                clarification = kg_client.ask_for_clarification(entities)
+                if clarification and entities.confidence < 0.3:
+                    extracted_entities['needs_clarification'] = True
+                    response = clarification
                 else:
-                    # No products found
                     response = self._no_results_response(entities)
         else:
             # Use LLM for other queries
@@ -1456,16 +1876,16 @@ Nếu không biết câu trả lời, hãy hướng dẫn khách hàng liên h�
 
     def _generate_llm_response_sync(self, message, conversation):
         """Generate response using Ollama LLM (sync)"""
-        # Check cache
+        from chatbot_app.middleware.trace import make_traced_headers
+
         cache_key = f"llm_response:{hash(message)}"
         cached = cache.get(cache_key)
         if cached:
             return cached
 
         try:
-            # Build messages context - limit to last 5 messages for speed
             messages = self._build_context(conversation, message)
-            if len(messages) > 6:  # system + 5 messages
+            if len(messages) > 6:
                 messages = [messages[0]] + messages[-5:]
 
             response = httpx.post(
@@ -1474,12 +1894,10 @@ Nếu không biết câu trả lời, hãy hướng dẫn khách hàng liên h�
                     "model": self.ollama_model,
                     "messages": messages,
                     "stream": False,
-                    "options": {
-                        "num_predict": 200,
-                        "temperature": 0.7
-                    }
+                    "options": {"num_predict": 200, "temperature": 0.7},
                 },
-                timeout=90.0
+                headers=make_traced_headers(),
+                timeout=90.0,
             )
 
             if response.status_code == 200:

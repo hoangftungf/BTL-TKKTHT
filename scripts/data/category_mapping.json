@@ -1,0 +1,425 @@
+{
+  "version": "1.0",
+  "description": "Bilingual Category Mapping - Vietnamese display + English slugs",
+  "categories": [
+    {
+      "id": "cat_electronics",
+      "name_vi": "Dien tu - Cong nghe",
+      "name_en": "Electronics",
+      "slug": "electronics",
+      "level": 0,
+      "keywords_vi": ["dien tu", "cong nghe", "may moc", "thiet bi"],
+      "keywords_en": ["electronics", "technology", "devices", "gadgets"],
+      "children": [
+        {
+          "id": "cat_phones",
+          "name_vi": "Dien thoai & Phu kien",
+          "name_en": "Phones & Accessories",
+          "slug": "phones-accessories",
+          "level": 1,
+          "keywords_vi": ["dien thoai", "di dong", "smartphone", "phu kien"],
+          "keywords_en": ["phone", "mobile", "smartphone", "accessories"],
+          "children": [
+            {
+              "id": "cat_smartphone",
+              "name_vi": "Dien thoai Smartphone",
+              "name_en": "Smartphone",
+              "slug": "smartphone",
+              "level": 2,
+              "keywords_vi": ["dien thoai", "smartphone", "iphone", "samsung", "xiaomi", "oppo", "vivo"],
+              "keywords_en": ["smartphone", "phone", "mobile", "iphone", "android"]
+            },
+            {
+              "id": "cat_tablet",
+              "name_vi": "May tinh bang",
+              "name_en": "Tablet",
+              "slug": "tablet",
+              "level": 2,
+              "keywords_vi": ["may tinh bang", "tablet", "ipad"],
+              "keywords_en": ["tablet", "ipad", "tab"]
+            },
+            {
+              "id": "cat_phone_acc",
+              "name_vi": "Phu kien dien thoai",
+              "name_en": "Phone Accessories",
+              "slug": "phone-accessories",
+              "level": 2,
+              "keywords_vi": ["phu kien", "op lung", "sac", "tai nghe", "cap"],
+              "keywords_en": ["case", "charger", "earphone", "cable", "screen protector"]
+            }
+          ]
+        },
+        {
+          "id": "cat_computers",
+          "name_vi": "May tinh & Laptop",
+          "name_en": "Computers & Laptops",
+          "slug": "computers-laptops",
+          "level": 1,
+          "keywords_vi": ["may tinh", "laptop", "pc", "linh kien"],
+          "keywords_en": ["computer", "laptop", "pc", "notebook"],
+          "children": [
+            {
+              "id": "cat_laptop",
+              "name_vi": "Laptop",
+              "name_en": "Laptop",
+              "slug": "laptop",
+              "level": 2,
+              "keywords_vi": ["laptop", "may tinh xach tay", "macbook", "dell", "asus", "lenovo", "hp"],
+              "keywords_en": ["laptop", "notebook", "macbook", "ultrabook"]
+            },
+            {
+              "id": "cat_desktop",
+              "name_vi": "PC de ban",
+              "name_en": "Desktop PC",
+              "slug": "desktop-pc",
+              "level": 2,
+              "keywords_vi": ["pc", "may tinh de ban", "case", "main"],
+              "keywords_en": ["desktop", "pc", "tower", "workstation"]
+            },
+            {
+              "id": "cat_components",
+              "name_vi": "Linh kien may tinh",
+              "name_en": "Computer Components",
+              "slug": "computer-components",
+              "level": 2,
+              "keywords_vi": ["linh kien", "ram", "ssd", "card do hoa", "cpu", "main"],
+              "keywords_en": ["components", "ram", "ssd", "gpu", "cpu", "motherboard"]
+            }
+          ]
+        },
+        {
+          "id": "cat_audio",
+          "name_vi": "Thiet bi am thanh",
+          "name_en": "Audio Devices",
+          "slug": "audio-devices",
+          "level": 1,
+          "keywords_vi": ["tai nghe", "loa", "am thanh", "headphone"],
+          "keywords_en": ["headphone", "speaker", "audio", "earbuds"],
+          "children": [
+            {
+              "id": "cat_headphones",
+              "name_vi": "Tai nghe",
+              "name_en": "Headphones",
+              "slug": "headphones",
+              "level": 2,
+              "keywords_vi": ["tai nghe", "headphone", "airpods", "sony", "chong on"],
+              "keywords_en": ["headphones", "earbuds", "airpods", "wireless", "noise cancelling"]
+            },
+            {
+              "id": "cat_speakers",
+              "name_vi": "Loa",
+              "name_en": "Speakers",
+              "slug": "speakers",
+              "level": 2,
+              "keywords_vi": ["loa", "loa bluetooth", "soundbar", "loa keo"],
+              "keywords_en": ["speaker", "bluetooth speaker", "soundbar", "portable speaker"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cat_fashion",
+      "name_vi": "Thoi trang",
+      "name_en": "Fashion",
+      "slug": "fashion",
+      "level": 0,
+      "keywords_vi": ["thoi trang", "quan ao", "giay dep", "phu kien"],
+      "keywords_en": ["fashion", "clothing", "apparel", "wear"],
+      "children": [
+        {
+          "id": "cat_fashion_men",
+          "name_vi": "Thoi trang Nam",
+          "name_en": "Men Fashion",
+          "slug": "men-fashion",
+          "level": 1,
+          "keywords_vi": ["nam", "thoi trang nam", "do nam"],
+          "keywords_en": ["men", "male", "mens"],
+          "children": [
+            {
+              "id": "cat_shirt_men",
+              "name_vi": "Ao nam",
+              "name_en": "Men Shirts",
+              "slug": "men-shirts",
+              "level": 2,
+              "keywords_vi": ["ao nam", "ao thun", "ao so mi", "ao khoac", "ao polo", "hoodie"],
+              "keywords_en": ["shirt", "t-shirt", "polo", "jacket", "hoodie", "sweater"]
+            },
+            {
+              "id": "cat_pants_men",
+              "name_vi": "Quan nam",
+              "name_en": "Men Pants",
+              "slug": "men-pants",
+              "level": 2,
+              "keywords_vi": ["quan nam", "quan jean", "quan short", "quan tay", "quan jogger"],
+              "keywords_en": ["pants", "jeans", "shorts", "trousers", "joggers"]
+            },
+            {
+              "id": "cat_shoes_men",
+              "name_vi": "Giay nam",
+              "name_en": "Men Shoes",
+              "slug": "men-shoes",
+              "level": 2,
+              "keywords_vi": ["giay nam", "giay sneaker", "giay the thao", "dep", "sandal"],
+              "keywords_en": ["shoes", "sneakers", "boots", "sandals", "loafers"]
+            }
+          ]
+        },
+        {
+          "id": "cat_fashion_women",
+          "name_vi": "Thoi trang Nu",
+          "name_en": "Women Fashion",
+          "slug": "women-fashion",
+          "level": 1,
+          "keywords_vi": ["nu", "thoi trang nu", "do nu"],
+          "keywords_en": ["women", "female", "womens", "ladies"],
+          "children": [
+            {
+              "id": "cat_dress",
+              "name_vi": "Dam/Vay",
+              "name_en": "Dresses",
+              "slug": "dresses",
+              "level": 2,
+              "keywords_vi": ["dam", "vay", "chan vay", "dam maxi", "dam body"],
+              "keywords_en": ["dress", "skirt", "gown", "maxi", "midi"]
+            },
+            {
+              "id": "cat_tops_women",
+              "name_vi": "Ao nu",
+              "name_en": "Women Tops",
+              "slug": "women-tops",
+              "level": 2,
+              "keywords_vi": ["ao nu", "ao thun nu", "ao so mi nu", "ao khoac nu", "ao croptop"],
+              "keywords_en": ["tops", "blouse", "shirt", "crop top", "cardigan"]
+            },
+            {
+              "id": "cat_shoes_women",
+              "name_vi": "Giay nu",
+              "name_en": "Women Shoes",
+              "slug": "women-shoes",
+              "level": 2,
+              "keywords_vi": ["giay nu", "giay cao got", "sandal nu", "giay the thao nu", "boot"],
+              "keywords_en": ["heels", "sandals", "flats", "boots", "sneakers"]
+            }
+          ]
+        },
+        {
+          "id": "cat_bags",
+          "name_vi": "Tui xach & Balo",
+          "name_en": "Bags & Backpacks",
+          "slug": "bags-backpacks",
+          "level": 1,
+          "keywords_vi": ["tui", "balo", "vi", "tui xach"],
+          "keywords_en": ["bag", "backpack", "wallet", "handbag", "purse"],
+          "children": []
+        },
+        {
+          "id": "cat_watches",
+          "name_vi": "Dong ho",
+          "name_en": "Watches",
+          "slug": "watches",
+          "level": 1,
+          "keywords_vi": ["dong ho", "dong ho deo tay", "smartwatch", "apple watch"],
+          "keywords_en": ["watch", "wristwatch", "smartwatch", "timepiece"],
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "cat_beauty",
+      "name_vi": "Lam dep - My pham",
+      "name_en": "Beauty & Cosmetics",
+      "slug": "beauty-cosmetics",
+      "level": 0,
+      "keywords_vi": ["my pham", "lam dep", "trang diem", "cham soc"],
+      "keywords_en": ["beauty", "cosmetics", "makeup", "skincare"],
+      "children": [
+        {
+          "id": "cat_skincare",
+          "name_vi": "Cham soc da",
+          "name_en": "Skincare",
+          "slug": "skincare",
+          "level": 1,
+          "keywords_vi": ["cham soc da", "duong da", "sua rua mat", "kem duong", "serum", "toner"],
+          "keywords_en": ["skincare", "moisturizer", "cleanser", "serum", "toner", "cream"],
+          "children": [
+            {
+              "id": "cat_cleanser",
+              "name_vi": "Sua rua mat",
+              "name_en": "Cleansers",
+              "slug": "cleansers",
+              "level": 2,
+              "keywords_vi": ["sua rua mat", "gel rua mat", "nuoc tay trang"],
+              "keywords_en": ["cleanser", "face wash", "makeup remover"]
+            },
+            {
+              "id": "cat_moisturizer",
+              "name_vi": "Kem duong am",
+              "name_en": "Moisturizers",
+              "slug": "moisturizers",
+              "level": 2,
+              "keywords_vi": ["kem duong", "duong am", "lotion", "gel duong"],
+              "keywords_en": ["moisturizer", "cream", "lotion", "hydrating"]
+            },
+            {
+              "id": "cat_serum",
+              "name_vi": "Serum & Tinh chat",
+              "name_en": "Serums & Essences",
+              "slug": "serums-essences",
+              "level": 2,
+              "keywords_vi": ["serum", "tinh chat", "ampoule", "vitamin c"],
+              "keywords_en": ["serum", "essence", "ampoule", "treatment"]
+            }
+          ]
+        },
+        {
+          "id": "cat_makeup",
+          "name_vi": "Trang diem",
+          "name_en": "Makeup",
+          "slug": "makeup",
+          "level": 1,
+          "keywords_vi": ["trang diem", "son", "phan", "mascara", "kem nen"],
+          "keywords_en": ["makeup", "lipstick", "foundation", "mascara", "eyeshadow"],
+          "children": [
+            {
+              "id": "cat_lipstick",
+              "name_vi": "Son moi",
+              "name_en": "Lipsticks",
+              "slug": "lipsticks",
+              "level": 2,
+              "keywords_vi": ["son", "son moi", "son kem", "son thoi", "lip tint"],
+              "keywords_en": ["lipstick", "lip gloss", "lip tint", "lip balm"]
+            },
+            {
+              "id": "cat_foundation",
+              "name_vi": "Kem nen & Phan phu",
+              "name_en": "Foundation & Powder",
+              "slug": "foundation-powder",
+              "level": 2,
+              "keywords_vi": ["kem nen", "phan phu", "cushion", "bb cream", "cc cream"],
+              "keywords_en": ["foundation", "powder", "cushion", "bb cream", "concealer"]
+            }
+          ]
+        },
+        {
+          "id": "cat_haircare",
+          "name_vi": "Cham soc toc",
+          "name_en": "Haircare",
+          "slug": "haircare",
+          "level": 1,
+          "keywords_vi": ["cham soc toc", "dau goi", "dau xa", "duong toc"],
+          "keywords_en": ["haircare", "shampoo", "conditioner", "hair treatment"],
+          "children": []
+        },
+        {
+          "id": "cat_perfume",
+          "name_vi": "Nuoc hoa",
+          "name_en": "Perfume",
+          "slug": "perfume",
+          "level": 1,
+          "keywords_vi": ["nuoc hoa", "nuoc hoa nam", "nuoc hoa nu", "body mist"],
+          "keywords_en": ["perfume", "fragrance", "cologne", "body mist"],
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "cat_home",
+      "name_vi": "Nha cua - Doi song",
+      "name_en": "Home & Living",
+      "slug": "home-living",
+      "level": 0,
+      "keywords_vi": ["nha cua", "gia dung", "do dung", "noi that"],
+      "keywords_en": ["home", "living", "household", "furniture"],
+      "children": [
+        {
+          "id": "cat_kitchen",
+          "name_vi": "Do dung nha bep",
+          "name_en": "Kitchen",
+          "slug": "kitchen",
+          "level": 1,
+          "keywords_vi": ["nha bep", "noi", "chao", "may xay", "noi chien"],
+          "keywords_en": ["kitchen", "cookware", "appliances", "utensils"],
+          "children": [
+            {
+              "id": "cat_cookware",
+              "name_vi": "Noi chao",
+              "name_en": "Cookware",
+              "slug": "cookware",
+              "level": 2,
+              "keywords_vi": ["noi", "chao", "noi ap suat", "noi com dien"],
+              "keywords_en": ["pot", "pan", "pressure cooker", "rice cooker"]
+            },
+            {
+              "id": "cat_kitchen_appliances",
+              "name_vi": "Thiet bi nha bep",
+              "name_en": "Kitchen Appliances",
+              "slug": "kitchen-appliances",
+              "level": 2,
+              "keywords_vi": ["may xay", "noi chien khong dau", "lo vi song", "may pha cafe"],
+              "keywords_en": ["blender", "air fryer", "microwave", "coffee maker"]
+            }
+          ]
+        },
+        {
+          "id": "cat_bedroom",
+          "name_vi": "Phong ngu",
+          "name_en": "Bedroom",
+          "slug": "bedroom",
+          "level": 1,
+          "keywords_vi": ["phong ngu", "chan ga", "goi", "dem", "ra trai giuong"],
+          "keywords_en": ["bedroom", "bedding", "pillow", "mattress", "sheets"],
+          "children": []
+        },
+        {
+          "id": "cat_bathroom",
+          "name_vi": "Phong tam",
+          "name_en": "Bathroom",
+          "slug": "bathroom",
+          "level": 1,
+          "keywords_vi": ["phong tam", "khan tam", "bon tam", "voi sen"],
+          "keywords_en": ["bathroom", "towel", "shower", "bath"],
+          "children": []
+        },
+        {
+          "id": "cat_appliances",
+          "name_vi": "Thiet bi gia dung",
+          "name_en": "Home Appliances",
+          "slug": "home-appliances",
+          "level": 1,
+          "keywords_vi": ["may giat", "tu lanh", "dieu hoa", "may loc khong khi", "quat"],
+          "keywords_en": ["washing machine", "refrigerator", "air conditioner", "air purifier", "fan"],
+          "children": []
+        }
+      ]
+    }
+  ],
+  "tiki_category_mapping": {
+    "Dien Thoai - May Tinh Bang": "cat_phones",
+    "Laptop - May Vi Tinh - Linh kien": "cat_computers",
+    "Thoi Trang Nam": "cat_fashion_men",
+    "Thoi Trang Nu": "cat_fashion_women",
+    "Lam Dep - Suc Khoe": "cat_beauty",
+    "Nha Cua - Doi Song": "cat_home",
+    "Dien Tu - Dien Lanh": "cat_electronics",
+    "Giay - Dep Nam": "cat_shoes_men",
+    "Giay - Dep Nu": "cat_shoes_women",
+    "Tui Vi Nam": "cat_bags",
+    "Tui Nu": "cat_bags",
+    "Dong Ho va Trang Suc": "cat_watches"
+  },
+  "shopee_category_mapping": {
+    "Dien thoai & Phu kien": "cat_phones",
+    "May Tinh & Laptop": "cat_computers",
+    "Thoi Trang Nam": "cat_fashion_men",
+    "Thoi Trang Nu": "cat_fashion_women",
+    "Sac Dep": "cat_beauty",
+    "Nha Cua & Doi Song": "cat_home",
+    "Thiet Bi Dien Tu": "cat_electronics",
+    "Giay Dep Nam": "cat_shoes_men",
+    "Giay Dep Nu": "cat_shoes_women",
+    "Tui Vi Nam": "cat_bags",
+    "Tui Vi Nu": "cat_bags",
+    "Dong Ho": "cat_watches"
+  }
+}

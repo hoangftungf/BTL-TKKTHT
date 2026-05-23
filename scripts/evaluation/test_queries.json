@@ -1,0 +1,277 @@
+{
+  "version": "1.0",
+  "description": "Test queries for AI chatbot evaluation",
+  "created_at": "2026-05-23",
+  "queries": [
+    {
+      "id": "laptop_01",
+      "query": "Tu van laptop Dell gia duoi 30 trieu cho lap trinh",
+      "expected_category": "laptop",
+      "expected_price_max": 30000000,
+      "expected_price_min": null,
+      "expected_brand": "dell",
+      "query_type": "product_search"
+    },
+    {
+      "id": "laptop_02",
+      "query": "MacBook Pro M3 co gi moi? Gia bao nhieu?",
+      "expected_category": "laptop",
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": "apple",
+      "query_type": "product_search"
+    },
+    {
+      "id": "laptop_03",
+      "query": "Laptop gaming RTX 4070 gia tu 35 den 45 trieu",
+      "expected_category": "laptop",
+      "expected_price_max": 45000000,
+      "expected_price_min": 35000000,
+      "expected_brand": null,
+      "query_type": "product_search"
+    },
+    {
+      "id": "phone_01",
+      "query": "Tim dien thoai Samsung gia khoang 15 trieu",
+      "expected_category": "smartphone",
+      "expected_price_max": 18000000,
+      "expected_price_min": 12000000,
+      "expected_brand": "samsung",
+      "query_type": "product_search"
+    },
+    {
+      "id": "phone_02",
+      "query": "iPhone 15 Pro Max co nhung mau nao? Gia bao nhieu?",
+      "expected_category": "smartphone",
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": "apple",
+      "query_type": "product_search"
+    },
+    {
+      "id": "phone_03",
+      "query": "Dien thoai chup anh dep gia duoi 10 trieu",
+      "expected_category": "smartphone",
+      "expected_price_max": 10000000,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "semantic"
+    },
+    {
+      "id": "fashion_men_01",
+      "query": "Ao polo nam cotton cao cap gia duoi 500k",
+      "expected_category": "men_shirts",
+      "expected_price_max": 500000,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "product_search"
+    },
+    {
+      "id": "fashion_men_02",
+      "query": "Giay sneaker Nike Air Force 1 size 42",
+      "expected_category": "men_shoes",
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": "nike",
+      "query_type": "product_search"
+    },
+    {
+      "id": "fashion_men_03",
+      "query": "Quan jean nam slim fit mau xanh dam",
+      "expected_category": "men_pants",
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "product_search"
+    },
+    {
+      "id": "fashion_women_01",
+      "query": "Dam du tiec sang trong gia duoi 1 trieu",
+      "expected_category": "dresses",
+      "expected_price_max": 1000000,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "product_search"
+    },
+    {
+      "id": "fashion_women_02",
+      "query": "Vay cong so thanh lich cho nguoi di lam",
+      "expected_category": "dresses",
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "semantic"
+    },
+    {
+      "id": "fashion_women_03",
+      "query": "Giay cao got nu 7cm mau den",
+      "expected_category": "women_shoes",
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "product_search"
+    },
+    {
+      "id": "beauty_01",
+      "query": "Son moi mau do cam gia duoi 400k",
+      "expected_category": "lipstick",
+      "expected_price_max": 400000,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "product_search"
+    },
+    {
+      "id": "beauty_02",
+      "query": "Serum vitamin C tri tham nam tot nhat",
+      "expected_category": "skincare",
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "semantic"
+    },
+    {
+      "id": "beauty_03",
+      "query": "Kem nen che phu tot cho da dau",
+      "expected_category": "makeup",
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "semantic"
+    },
+    {
+      "id": "beauty_04",
+      "query": "Sua rua mat Innisfree hay Senka tot hon?",
+      "expected_category": "skincare",
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "semantic"
+    },
+    {
+      "id": "home_01",
+      "query": "Noi chien khong dau Philips 6 lit gia bao nhieu?",
+      "expected_category": "kitchen",
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": "philips",
+      "query_type": "product_search"
+    },
+    {
+      "id": "home_02",
+      "query": "May pha ca phe tu dong tot nhat cho gia dinh",
+      "expected_category": "kitchen",
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "semantic"
+    },
+    {
+      "id": "home_03",
+      "query": "Bo noi inox cao cap gia duoi 5 trieu",
+      "expected_category": "kitchen",
+      "expected_price_max": 5000000,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "product_search"
+    },
+    {
+      "id": "audio_01",
+      "query": "Tai nghe chong on Sony WH-1000XM5",
+      "expected_category": "headphones",
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": "sony",
+      "query_type": "product_search"
+    },
+    {
+      "id": "audio_02",
+      "query": "Tai nghe true wireless gia duoi 2 trieu",
+      "expected_category": "headphones",
+      "expected_price_max": 2000000,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "product_search"
+    },
+    {
+      "id": "semantic_01",
+      "query": "San pham phu hop cho nguoi di lam van phong",
+      "expected_category": null,
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "semantic"
+    },
+    {
+      "id": "semantic_02",
+      "query": "Qua tang cho ban gai dip sinh nhat",
+      "expected_category": null,
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "semantic"
+    },
+    {
+      "id": "semantic_03",
+      "query": "Do dung thiet yeu cho nguoi moi ra rieng",
+      "expected_category": null,
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "semantic"
+    },
+    {
+      "id": "edge_01",
+      "query": "Tim iPhone 25 Pro Max gia bao nhieu?",
+      "expected_category": null,
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "edge_case"
+    },
+    {
+      "id": "edge_02",
+      "query": "Laptop Alienware X99 co ban khong?",
+      "expected_category": null,
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "edge_case"
+    },
+    {
+      "id": "edge_03",
+      "query": "asdfghjkl",
+      "expected_category": null,
+      "expected_price_max": null,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "edge_case"
+    },
+    {
+      "id": "edge_04",
+      "query": "San pham gia 1 dong",
+      "expected_category": null,
+      "expected_price_max": 1,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "edge_case"
+    },
+    {
+      "id": "price_01",
+      "query": "Laptop gia tu 20 den 30 trieu",
+      "expected_category": "laptop",
+      "expected_price_max": 30000000,
+      "expected_price_min": 20000000,
+      "expected_brand": null,
+      "query_type": "product_search"
+    },
+    {
+      "id": "price_02",
+      "query": "Dien thoai gia duoi 5 trieu",
+      "expected_category": "smartphone",
+      "expected_price_max": 5000000,
+      "expected_price_min": null,
+      "expected_brand": null,
+      "query_type": "product_search"
+    }
+  ]
+}

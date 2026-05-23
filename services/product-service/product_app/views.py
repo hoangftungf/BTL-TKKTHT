@@ -19,9 +19,14 @@ def track_behavior(user_id, action, product_id=None, category_id=None, metadata=
     import httpx
     import os
     from threading import Thread
+    from product_app.middleware.trace import get_current_trace_id
 
     if not user_id:
         return
+
+    # Capture trace_id on the request thread — thread-local won't be available
+    # inside the daemon thread because it runs on a different OS thread.
+    trace_id = get_current_trace_id()
 
     def _send():
         try:
@@ -33,7 +38,7 @@ def track_behavior(user_id, action, product_id=None, category_id=None, metadata=
                 'category_id': str(category_id) if category_id else None,
                 'metadata': metadata or {},
             }
-            httpx.post(f"{url}/track/", json=payload, timeout=5.0)
+            httpx.post(f"{url}/track/", json=payload, headers={'X-Trace-Id': trace_id}, timeout=5.0)
         except Exception as e:
             logger.warning(f"Tracking error: {e}")
 

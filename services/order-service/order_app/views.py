@@ -3,6 +3,7 @@ import httpx
 import os
 from threading import Thread
 from django.conf import settings
+from order_app.middleware.trace import get_current_trace_id, make_traced_headers
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.views import APIView
@@ -19,6 +20,9 @@ def track_behavior(user_id, action, product_id=None, metadata=None):
     if not user_id:
         return
 
+    # Capture trace_id on the request thread before spawning daemon thread.
+    trace_id = get_current_trace_id()
+
     def _send():
         try:
             url = os.environ.get('RECOMMENDATION_SERVICE_URL', 'http://ai-recommendation:8008')
@@ -28,7 +32,7 @@ def track_behavior(user_id, action, product_id=None, metadata=None):
                 'product_id': str(product_id) if product_id else None,
                 'metadata': metadata or {},
             }
-            httpx.post(f"{url}/track/", json=payload, timeout=5.0)
+            httpx.post(f"{url}/track/", json=payload, headers={'X-Trace-Id': trace_id}, timeout=5.0)
         except Exception as e:
             logger.warning(f"Tracking error: {e}")
 
@@ -41,6 +45,9 @@ def track_purchase_bulk(user_id, items, order_id):
     """Track purchase for all items in order."""
     if not user_id:
         return
+
+    # Capture trace_id on the request thread before spawning daemon thread.
+    trace_id = get_current_trace_id()
 
     def _send():
         try:
@@ -57,7 +64,7 @@ def track_purchase_bulk(user_id, items, order_id):
                         'product_name': item.get('product_name', ''),
                     },
                 }
-                httpx.post(f"{url}/track/", json=payload, timeout=5.0)
+                httpx.post(f"{url}/track/", json=payload, headers={'X-Trace-Id': trace_id}, timeout=5.0)
         except Exception as e:
             logger.warning(f"Tracking error: {e}")
 
@@ -90,7 +97,7 @@ class OrderListCreateView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            headers = {'Authorization': request.headers.get('Authorization')}
+            headers = make_traced_headers({'Authorization': request.headers.get('Authorization')})
             cart_response = httpx.get(f"{settings.CART_SERVICE_URL}/", headers=headers, timeout=10.0)
             if cart_response.status_code != 200:
                 return Response({'error': 'Không thể lấy thông tin giỏ hàng'}, status=status.HTTP_400_BAD_REQUEST)
@@ -143,6 +150,7 @@ class OrderListCreateView(APIView):
         )
 
         try:
+            # headers already contains X-Trace-Id (set above via make_traced_headers)
             httpx.delete(f"{settings.CART_SERVICE_URL}/clear/", headers=headers, timeout=5.0)
         except Exception:
             pass

@@ -22,6 +22,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'product_app.middleware.trace.TraceMiddleware',  # MUST be first — sets trace_id before any other middleware
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -100,3 +101,43 @@ REST_FRAMEWORK = {
 
 JWT_SECRET = os.environ.get('JWT_SECRET', SECRET_KEY)
 RABBITMQ_URL = os.environ.get('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672/')
+
+# ── Logging — inject [Trace-ID: xxx] on every log line ───────────────────────
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'filters': {
+        'trace_id': {
+            '()': 'product_app.middleware.trace.TraceIdFilter',
+        },
+    },
+    'formatters': {
+        'trace': {
+            'format': '[%(asctime)s] [Trace-ID: %(trace_id)s] %(levelname)s %(name)s: %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'filters': ['trace_id'],
+            'formatter': 'trace',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': os.environ.get('LOG_LEVEL', 'INFO'),
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': os.environ.get('DJANGO_LOG_LEVEL', 'WARNING'),
+            'propagate': False,
+        },
+        'product_app': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}

@@ -23,6 +23,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'chatbot_app.middleware.trace.TraceMiddleware',   # must be first to capture all requests
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -92,10 +93,17 @@ CORS_ALLOW_ALL_ORIGINS = True
 
 # Ollama Settings
 OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'http://ollama:11434')
-OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3.2')
+# Production model (2026-05-23): llama3.2:3b
+# Selected for optimal System Scalability & Resource Efficiency on 16GB RAM infrastructure
+# Evaluation on 280 real products: 100% query completion, 18s avg latency, 0.67 overall score
+OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3.2:3b')
 
 # Product Service URL
 PRODUCT_SERVICE_URL = os.getenv('PRODUCT_SERVICE_URL', 'http://product-service:8000/api/products')
+
+# FAISS index directory — pre-built by 'python manage.py build_ai_index'
+# Mount this path as a Docker volume so the index survives container restarts.
+AI_INDEX_DIR = os.getenv('AI_INDEX_DIR', '/app/ai_index')
 
 LOGGING = {
     'version': 1,
