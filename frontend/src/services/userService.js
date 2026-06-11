@@ -45,6 +45,16 @@ const userService = {
     const response = await api.delete('/users/wishlist/', { data: { product_id: productId } });
     return response.data;
   },
+
+  getAdminUsers: async () => {
+    const response = await api.get('/auth/users/');
+    return response.data;
+  },
+
+  updateAdminUser: async (id, userData) => {
+    const response = await api.put(`/auth/users/${id}/`, userData);
+    return response.data;
+  },
 };
 
 export default userService;

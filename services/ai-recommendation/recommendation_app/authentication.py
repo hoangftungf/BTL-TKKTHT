@@ -18,7 +18,5 @@ class JWTAuthentication(authentication.BaseAuthentication):
         try:
             payload = jwt.decode(token, settings.JWT_SECRET, algorithms=['HS256'])
             return (JWTUser(payload), token)
-        except jwt.ExpiredSignatureError:
-            raise exceptions.AuthenticationFailed('Token đã hết hạn')
-        except jwt.InvalidTokenError:
-            raise exceptions.AuthenticationFailed('Token không hợp lệ')
+        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+            return None

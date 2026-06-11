@@ -22,9 +22,22 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 class ProductImageSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+
     class Meta:
         model = ProductImage
         fields = ['id', 'image', 'alt_text', 'is_primary', 'display_order']
+
+    def get_image(self, obj):
+        if not obj.image:
+            return None
+        image_str = str(obj.image)
+        if image_str.startswith('http://') or image_str.startswith('https://'):
+            return image_str
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(obj.image.url)
+        return obj.image.url
 
 
 class ProductVariantSerializer(serializers.ModelSerializer):
@@ -90,3 +103,27 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         if category_id:
             validated_data['category_id'] = category_id
         return super().update(instance, validated_data)
+
+
+class ProductSuggestSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+    category_name = serializers.CharField(source='category.name', read_only=True)
+
+    class Meta:
+        model = Product
+        fields = ['id', 'name', 'slug', 'price', 'compare_price', 'image', 'category_name']
+
+    def get_image(self, obj):
+        primary = obj.images.filter(is_primary=True).first()
+        if not primary:
+            primary = obj.images.first()
+        if primary:
+            image_str = str(primary.image)
+            if image_str.startswith('http://') or image_str.startswith('https://'):
+                return image_str
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(primary.image.url)
+            return primary.image.url
+        return None
+

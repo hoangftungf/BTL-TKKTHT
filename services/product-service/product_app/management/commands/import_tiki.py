@@ -14,7 +14,7 @@ import json
 import re
 from pathlib import Path
 from django.core.management.base import BaseCommand
-from product_app.models import Category, Product
+from product_app.models import Category, Product, ProductImage
 
 
 # Bilingual Category Mapping for Tiki data
@@ -222,7 +222,7 @@ class Command(BaseCommand):
                 counter += 1
 
             try:
-                Product.objects.create(
+                p_obj = Product.objects.create(
                     name=product['name'],
                     slug=product_slug,
                     sku=sku,
@@ -236,6 +236,18 @@ class Command(BaseCommand):
                     status='active',
                     category=category,
                 )
+                
+                # Add primary image if image_url is available
+                image_url = product.get('image_url')
+                if image_url:
+                    ProductImage.objects.create(
+                        product=p_obj,
+                        image=image_url,
+                        is_primary=True,
+                        alt_text=p_obj.name,
+                        display_order=0
+                    )
+
                 stats['products_created'] += 1
                 existing_skus.add(sku)
 

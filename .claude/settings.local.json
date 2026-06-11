@@ -63,7 +63,20 @@
       "Bash(python tests/test_query_parser.py)",
       "Bash(python tests/test_query_parser_standalone.py)",
       "Bash(pip show:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(python -c \"from pypdf import PdfReader; reader = PdfReader\\(''C:/BTL-TKKTHT/danhgia_kientruc_thietke_2026.pdf''\\); text = ''''.join\\([page.extract_text\\(\\) or '''' for page in reader.pages]\\); print\\(text\\)\")",
+      "Bash(set PYTHONIOENCODING=utf-8)",
+      "Bash(pytest tests/test_ai_system.py -v --tb=short)",
+      "Bash(ollama list:*)",
+      "Bash(curl -s -X POST http://localhost:8005/api/chat/ -H 'Content-Type: application/json' -d '{\"\"\"\"message\"\"\"\": \"\"\"\"tim laptop gia duoi 25 trieu\"\"\"\"}')",
+      "Bash(curl -s -X POST http://localhost:8012/api/chatbot/chat/ -H \"Content-Type: application/json\" -d '{\"\"\"\"message\"\"\"\": \"\"\"\"tim laptop gia duoi 25 trieu\"\"\"\"}')",
+      "Bash(curl -s -X POST http://localhost:8012/api/chatbot/chat/ -H \"Content-Type: application/json\" -d '{\"\"\"\"message\"\"\"\": \"\"\"\"laptop dell gia re\"\"\"\"}')",
+      "Bash(mkdir:*)",
+      "Bash(curl -s -X POST http://localhost:8012/api/chatbot/chat/ -H \"Content-Type: application/json\" -d '{\"\"\"\"message\"\"\"\": \"\"\"\"laptop dell\"\"\"\"}')",
+      "Bash(cd:*)",
+      "Bash(ls -la C:/BTL-TKKTHT/results/evaluation_with_local_judge.*)",
+      "Bash(npm run:*)",
+      "Bash(DOCKER_BUILDKIT=1 docker build --no-cache --progress=plain -t btl-tkktht-frontend frontend/)"
     ]
   }
 }

@@ -142,3 +142,23 @@ class IntentListView(APIView):
                 for i in intents
             ]
         })
+
+
+class ConversationListView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        conversations = Conversation.objects.all().order_by('-created_at')[:50]
+        return Response({
+            'conversations': [
+                {
+                    'id': str(c.id),
+                    'user_id': c.user_id,
+                    'session_id': c.session_id,
+                    'created_at': c.created_at,
+                    'updated_at': c.updated_at,
+                    'message_count': c.messages.count()
+                }
+                for c in conversations
+            ]
+        })

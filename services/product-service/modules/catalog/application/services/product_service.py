@@ -10,6 +10,7 @@ from ...domain.entities.product import Product, ProductStatus
 from ...domain.repositories.product_repository import ProductRepository
 from ...domain.value_objects.money import Money
 from ...domain.value_objects.sku import SKU
+from ...infrastructure.repositories.category_repository_impl import DjangoCategoryRepository
 
 
 class ProductService:
@@ -39,9 +40,20 @@ class ProductService:
         page: int = 1,
         page_size: int = 20
     ) -> Dict[str, Any]:
-        """Lay danh sach san pham voi filter"""
+        """Lay danh sach san pham voi filter (bao gom danh muc con)"""
+        category_ids = None
+        sub_categories = []
+
+        if category_id:
+            category_repo = DjangoCategoryRepository()
+            # Lay tat ca danh muc con de quy
+            descendants = category_repo.get_descendants(category_id)
+            category_ids = [category_id] + descendants
+            # Lay danh muc con truc tiep de hien thi
+            sub_categories = category_repo.get_direct_children(category_id)
+
         products, total = self._repository.list_active(
-            category_id=category_id,
+            category_ids=category_ids,
             brand=brand,
             min_price=min_price,
             max_price=max_price,
@@ -53,7 +65,8 @@ class ProductService:
             'products': products,
             'total': total,
             'page': page,
-            'page_size': page_size
+            'page_size': page_size,
+            'sub_categories': sub_categories
         }
 
     def search_products(self, query: str, limit: int = 50) -> List[Product]:

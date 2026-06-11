@@ -11,6 +11,7 @@ from product_app.views import (
     ProductSearchView,
     ProductByCategoryView,
     TrackClickView,
+    ProductSuggestView,
 )
 
 urlpatterns = [
@@ -18,6 +19,7 @@ urlpatterns = [
     path('health/', HealthCheckView.as_view(), name='health-check'),
     path('categories/', CategoryListView.as_view(), name='category-list'),
     path('categories/<uuid:pk>/', CategoryDetailView.as_view(), name='category-detail'),
+    path('suggest/', ProductSuggestView.as_view(), name='product-suggest'),
     path('', ProductListCreateView.as_view(), name='product-list'),
     path('<uuid:pk>/', ProductDetailView.as_view(), name='product-detail'),
     path('search/', ProductSearchView.as_view(), name='product-search'),

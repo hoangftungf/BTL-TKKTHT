@@ -91,3 +91,23 @@ class DjangoCategoryRepository(CategoryRepository):
         return ProductModel.objects.filter(
             category_id=category_id, status='active'
         ).count()
+
+    def get_descendants(self, category_id: UUID) -> List[UUID]:
+        """Lay tat ca ID danh muc con (de quy)"""
+        descendants = []
+        children = CategoryModel.objects.filter(
+            parent_id=category_id, is_active=True
+        ).values_list('id', flat=True)
+
+        for child_id in children:
+            descendants.append(child_id)
+            descendants.extend(self.get_descendants(child_id))
+
+        return descendants
+
+    def get_direct_children(self, category_id: UUID) -> List[Category]:
+        """Lay danh sach danh muc con truc tiep"""
+        models = CategoryModel.objects.filter(
+            parent_id=category_id, is_active=True
+        ).order_by('display_order', 'name')
+        return [self._to_entity(m) for m in models]

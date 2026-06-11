@@ -96,3 +96,46 @@
     }
   }
 }
+
+/* Ant Design Menu Custom Styles for Tiki Sidebar */
+.tiki-menu {
+  font-family: inherit;
+}
+
+.tiki-menu.ant-menu-inline {
+  border-inline-end: none !important;
+}
+
+.tiki-menu .ant-menu-item,
+.tiki-menu .ant-menu-submenu-title {
+  border-radius: 8px !important;
+  margin-inline: 0 !important;
+  margin-block: 4px !important;
+  padding-inline: 8px !important;
+  transition: all 0.2s ease;
+  height: 40px !important;
+  line-height: 40px !important;
+}
+
+.tiki-menu .ant-menu-item:hover,
+.tiki-menu .ant-menu-submenu-title:hover {
+  background-color: #f3f4f6 !important; /* bg-gray-100 */
+  color: #2563eb !important; /* text-blue-600 */
+}
+
+.tiki-menu .ant-menu-item-selected {
+  background-color: #eff6ff !important; /* bg-blue-50 */
+  color: #2563eb !important; /* text-blue-600 */
+  font-weight: 600;
+}
+
+.tiki-menu .ant-menu-submenu-arrow {
+  color: #9ca3af !important;
+}
+
+.tiki-menu .ant-menu-sub.ant-menu-inline {
+  background: #fafafa !important;
+  border-radius: 8px;
+  padding-inline-start: 12px !important;
+}
+

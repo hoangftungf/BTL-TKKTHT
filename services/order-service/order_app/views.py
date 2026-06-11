@@ -84,7 +84,10 @@ class OrderListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        orders = Order.objects.filter(user_id=request.user.id).prefetch_related('items')
+        if getattr(request.user, 'role', 'customer') in ['admin', 'seller']:
+            orders = Order.objects.all().prefetch_related('items')
+        else:
+            orders = Order.objects.filter(user_id=request.user.id).prefetch_related('items')
         status_filter = request.query_params.get('status')
         if status_filter:
             orders = orders.filter(status=status_filter)
@@ -163,7 +166,10 @@ class OrderDetailView(APIView):
 
     def get(self, request, pk):
         try:
-            order = Order.objects.prefetch_related('items', 'status_history').get(pk=pk, user_id=request.user.id)
+            if getattr(request.user, 'role', 'customer') in ['admin', 'seller']:
+                order = Order.objects.prefetch_related('items', 'status_history').get(pk=pk)
+            else:
+                order = Order.objects.prefetch_related('items', 'status_history').get(pk=pk, user_id=request.user.id)
             return Response(OrderDetailSerializer(order).data)
         except Order.DoesNotExist:
             return Response({'error': 'Đơn hàng không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
@@ -174,7 +180,10 @@ class OrderCancelView(APIView):
 
     def put(self, request, pk):
         try:
-            order = Order.objects.get(pk=pk, user_id=request.user.id)
+            if getattr(request.user, 'role', 'customer') in ['admin', 'seller']:
+                order = Order.objects.get(pk=pk)
+            else:
+                order = Order.objects.get(pk=pk, user_id=request.user.id)
         except Order.DoesNotExist:
             return Response({'error': 'Đơn hàng không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -196,7 +205,10 @@ class OrderTrackView(APIView):
 
     def get(self, request, pk):
         try:
-            order = Order.objects.prefetch_related('status_history').get(pk=pk, user_id=request.user.id)
+            if getattr(request.user, 'role', 'customer') in ['admin', 'seller']:
+                order = Order.objects.prefetch_related('status_history').get(pk=pk)
+            else:
+                order = Order.objects.prefetch_related('status_history').get(pk=pk, user_id=request.user.id)
             return Response({
                 'order_number': order.order_number,
                 'status': order.status,
@@ -208,3 +220,35 @@ class OrderTrackView(APIView):
             })
         except Order.DoesNotExist:
             return Response({'error': 'Đơn hàng không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class OrderStatusUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, pk):
+        if getattr(request.user, 'role', 'customer') not in ['admin', 'seller']:
+            return Response({'error': 'Bạn không có quyền thực hiện thao tác này'}, status=status.HTTP_403_FORBIDDEN)
+            
+        try:
+            order = Order.objects.get(pk=pk)
+        except Order.DoesNotExist:
+            return Response({'error': 'Đơn hàng không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+
+        new_status = request.data.get('status')
+        note = request.data.get('note', '')
+
+        valid_statuses = [choice[0] for choice in Order.STATUS_CHOICES]
+        if new_status not in valid_statuses:
+            return Response({'error': 'Trạng thái không hợp lệ'}, status=status.HTTP_400_BAD_REQUEST)
+
+        order.status = new_status
+        order.save()
+
+        OrderStatusHistory.objects.create(
+            order=order, 
+            status=new_status, 
+            note=note or f"Cập nhật trạng thái sang {order.get_status_display()}", 
+            created_by=request.user.id
+        )
+
+        return Response({'message': 'Cập nhật trạng thái thành công', 'order': OrderDetailSerializer(order).data})

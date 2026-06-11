@@ -4,7 +4,7 @@ Usage: python manage.py seed_data
 """
 from django.core.management.base import BaseCommand
 from decimal import Decimal
-from product_app.models import Category, Product
+from product_app.models import Category, Product, ProductImage
 
 # Categories data
 CATEGORIES = [
@@ -183,6 +183,22 @@ class Command(BaseCommand):
                 if created:
                     total_created += 1
                     self.stdout.write(f"    [+] {p['name']}")
+                    # Create placeholder image
+                    image_urls = {
+                        'smartphone': 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=500',
+                        'laptop': 'https://images.unsplash.com/photo-1496181130204-7552cc14b1e0?w=500',
+                        'ao-nam': 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500',
+                        'dam-vay': 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=500',
+                        'do-dung-nha-bep': 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=500',
+                    }
+                    img_url = image_urls.get(cat_slug, 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500')
+                    ProductImage.objects.create(
+                        product=product,
+                        image=img_url,
+                        is_primary=True,
+                        alt_text=product.name,
+                        display_order=0
+                    )
                 else:
                     self.stdout.write(f"    [=] {p['name']}")
 

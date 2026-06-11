@@ -1,0 +1,33 @@
+1. Phân tích và So sánh Kiến trúc (Chương 1)
+Chương này tập trung vào việc đặt nền móng lý thuyết và thực tiễn để lựa chọn kiến trúc phù hợp cho dự án.
+Bảng so sánh Monolithic vs. Microservices: Cần lập bảng chi tiết so sánh các khía cạnh: khả năng mở rộng, độ phức tạp khi triển khai, tính độc lập của dịch vụ và khả năng chịu lỗi.
+Hình ảnh minh họa sự phát triển: Yêu cầu có hình ảnh mô tả quá trình chuyển đổi kiến trúc mà các Big Tech đã áp dụng.
+Thiết kế thực tế: Đưa ra bản thảo thiết kế Micro và Mono cho lĩnh vực cụ thể (ví dụ: Y tế - Health care).
+2. Thiết kế Hệ thống Thương mại điện tử (Chương 2)
+Phần này đánh giá kỹ năng phân tích và mô hình hóa hệ thống cụ thể của bạn.
+Phân rã Dịch vụ (Service Decomposition): Hình ảnh minh họa việc chia nhỏ hệ thống thành các dịch vụ độc lập.
+Hệ thống Biểu đồ UML yêu cầu:
+Biểu đồ Use Case: Thể hiện các tác nhân và chức năng chính.
+Biểu đồ Lớp (Class Diagram): Chi tiết về cấu trúc dữ liệu và mối quan hệ giữa các đối tượng.
+Biểu đồ Luồng (Flow): Bao gồm Biểu đồ tuần tự (Sequence Diagram) và Biểu đồ hoạt động (Activity Diagram) để mô tả logic nghiệp vụ.
+Mô hình Dữ liệu (Data Model): Hình ảnh biểu đồ dữ liệu và mô tả các công nghệ lưu trữ được sử dụng (ví dụ: SQL, NoSQL).
+Dựa trên các chỉ dẫn chi tiết từ tài liệu "danhgia_kientruc_thietke_2026.pdf", dưới đây là bản mô tả chi tiết các tiêu chí đánh giá, tập trung vào các yêu cầu về biểu đồ, hình ảnh và kỹ thuật triển khai cho hệ thống của bạn:
+1. Phân tích và So sánh Kiến trúc (Chương 1)
+Chương này tập trung vào việc đặt nền móng lý thuyết và thực tiễn để lựa chọn kiến trúc phù hợp cho dự án.
+Bảng so sánh Monolithic vs. Microservices: Cần lập bảng chi tiết so sánh các khía cạnh: khả năng mở rộng, độ phức tạp khi triển khai, tính độc lập của dịch vụ và khả năng chịu lỗi.
+Hình ảnh minh họa sự phát triển: Yêu cầu có hình ảnh mô tả quá trình chuyển đổi kiến trúc mà các Big Tech đã áp dụng.
+Thiết kế thực tế: Đưa ra bản thảo thiết kế Micro và Mono cho lĩnh vực cụ thể (ví dụ: Y tế - Health care).
+2. Thiết kế Hệ thống Thương mại điện tử (Chương 2)
+Phần này đánh giá kỹ năng phân tích và mô hình hóa hệ thống cụ thể của bạn.
+Phân rã Dịch vụ (Service Decomposition): Hình ảnh minh họa việc chia nhỏ hệ thống thành các dịch vụ độc lập.
+Hệ thống Biểu đồ UML yêu cầu:
+Biểu đồ Use Case: Thể hiện các tác nhân và chức năng chính.
+Biểu đồ Lớp (Class Diagram): Chi tiết về cấu trúc dữ liệu và mối quan hệ giữa các đối tượng.
+Biểu đồ Luồng (Flow): Bao gồm Biểu đồ tuần tự (Sequence Diagram) và Biểu đồ hoạt động (Activity Diagram) để mô tả logic nghiệp vụ.
+Mô hình Dữ liệu (Data Model): Hình ảnh biểu đồ dữ liệu và mô tả các công nghệ lưu trữ được sử dụng (ví dụ: SQL, NoSQL).
+3. Tích hợp Dịch vụ AI & RAG (Chương 3)
+Tiêu chí này đánh giá khả năng triển khai AI vào ứng dụng thực tế.
+Sơ đồ Pipeline RAG: Mô tả quy trình từ truy vấn người dùng, truy xuất dữ liệu (Retrieval) đến tạo phản hồi (Generation).
+Mã nguồn và Cấu trúc: Hình ảnh chụp lại cấu trúc thư mục code và các đoạn mã quan trọng.
+Thử nghiệm và So sánh: Cần có hình ảnh hoặc bảng biểu thể hiện kết quả so sánh giữa 2-3 bộ dữ liệu thử nghiệm khác nhau.
+Giao diện Tích hợp: Ảnh chụp màn hình giao diện thực tế của chat AI tư vấn cho các mặt hàng trên hệ thống thương mại điện tử.

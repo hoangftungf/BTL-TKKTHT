@@ -12,7 +12,7 @@ const ProductsPage = () => {
   const [priceTo, setPriceTo] = useState('');
   const dispatch = useDispatch();
 
-  const { products, categories, pagination, loading } = useSelector((state) => state.product);
+  const { products, categories, subCategories, pagination, loading } = useSelector((state) => state.product);
 
   const currentCategory = searchParams.get('category') || '';
   const currentOrdering = searchParams.get('ordering') || '-created_at';
@@ -60,11 +60,31 @@ const ProductsPage = () => {
     { value: '-rating_avg', label: 'Đánh giá cao' },
   ];
 
+  // Tim ten danh muc hien tai
+  const findCategoryName = (categoryId, cats) => {
+    for (const cat of cats) {
+      if (String(cat.id) === categoryId) return cat.name;
+      if (cat.children) {
+        for (const child of cat.children) {
+          if (String(child.id) === categoryId) return child.name;
+          if (child.children) {
+            for (const subChild of child.children) {
+              if (String(subChild.id) === categoryId) return subChild.name;
+            }
+          }
+        }
+      }
+    }
+    return null;
+  };
+
+  const currentCategoryName = currentCategory ? findCategoryName(currentCategory, categories) : null;
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-gray-900">
-          {currentCategory ? 'Danh mục sản phẩm' : 'Tất cả sản phẩm'}
+          {currentCategoryName || 'Tất cả sản phẩm'}
         </h1>
         <button
           onClick={() => setShowFilters(!showFilters)}
@@ -74,6 +94,23 @@ const ProductsPage = () => {
           Lọc
         </button>
       </div>
+
+      {/* Sub-categories Filter Tags */}
+      {subCategories && subCategories.length > 0 && (
+        <div className="mb-6">
+          <div className="flex flex-wrap gap-2">
+            {subCategories.map((subCat) => (
+              <button
+                key={subCat.id}
+                onClick={() => handleCategoryChange(subCat.id)}
+                className="px-4 py-2 rounded-full text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-primary-50 hover:border-primary-500 hover:text-primary-600 transition-colors"
+              >
+                {subCat.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-8">
         {/* Filters Sidebar */}

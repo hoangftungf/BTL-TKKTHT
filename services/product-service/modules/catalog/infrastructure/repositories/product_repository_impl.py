@@ -98,6 +98,7 @@ class DjangoProductRepository(ProductRepository):
     def list_active(
         self,
         category_id: Optional[UUID] = None,
+        category_ids: Optional[List[UUID]] = None,
         brand: Optional[str] = None,
         min_price: Optional[int] = None,
         max_price: Optional[int] = None,
@@ -107,7 +108,9 @@ class DjangoProductRepository(ProductRepository):
     ) -> tuple[List[Product], int]:
         queryset = ProductModel.objects.filter(status='active').select_related('category')
 
-        if category_id:
+        if category_ids:
+            queryset = queryset.filter(category_id__in=category_ids)
+        elif category_id:
             queryset = queryset.filter(category_id=category_id)
         if brand:
             queryset = queryset.filter(brand__iexact=brand)

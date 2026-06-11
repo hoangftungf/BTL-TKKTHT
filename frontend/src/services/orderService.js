@@ -25,6 +25,11 @@ const orderService = {
     const response = await api.get(`/orders/${orderId}/track/`);
     return response.data;
   },
+
+  updateOrderStatus: async (orderId, status, note = '') => {
+    const response = await api.put(`/orders/${orderId}/status/`, { status, note });
+    return response.data;
+  },
 };
 
 export default orderService;

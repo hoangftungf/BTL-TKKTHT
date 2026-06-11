@@ -74,6 +74,7 @@ services:
       - DEBUG=${DEBUG:-True}
       - SECRET_KEY=${SECRET_KEY}
       - JWT_SECRET=${JWT_SECRET}
+      - ALLOWED_HOSTS=localhost,127.0.0.1,api-gateway
       - REDIS_URL=${REDIS_URL}
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL}
       - USER_SERVICE_URL=${USER_SERVICE_URL}

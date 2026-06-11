@@ -6,7 +6,9 @@ import { fetchWishlist } from './store/slices/wishlistSlice';
 
 // Layout
 import MainLayout from './components/layout/MainLayout';
+import AdminLayout from './components/layout/AdminLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import AdminRoute from './components/auth/AdminRoute';
 
 // Components
 import Chatbot from './components/Chatbot';
@@ -24,6 +26,13 @@ import OrdersPage from './pages/OrdersPage';
 import OrderDetailPage from './pages/OrderDetailPage';
 import SearchPage from './pages/SearchPage';
 import NotFoundPage from './pages/NotFoundPage';
+
+// Admin Pages
+import AdminDashboardPage from './pages/admin/AdminDashboardPage';
+import AdminProductsPage from './pages/admin/AdminProductsPage';
+import AdminOrdersPage from './pages/admin/AdminOrdersPage';
+import AdminUsersPage from './pages/admin/AdminUsersPage';
+import AdminAIPage from './pages/admin/AdminAIPage';
 
 function App() {
   const dispatch = useDispatch();
@@ -43,6 +52,7 @@ function App() {
   return (
     <>
       <Routes>
+        {/* Client Routes */}
         <Route path="/" element={<MainLayout />}>
           {/* Public routes */}
           <Route index element={<HomePage />} />
@@ -77,6 +87,22 @@ function App() {
 
           {/* 404 */}
           <Route path="*" element={<NotFoundPage />} />
+        </Route>
+
+        {/* Admin Routes */}
+        <Route
+          path="/admin-dashboard"
+          element={
+            <AdminRoute>
+              <AdminLayout />
+            </AdminRoute>
+          }
+        >
+          <Route index element={<AdminDashboardPage />} />
+          <Route path="products" element={<AdminProductsPage />} />
+          <Route path="orders" element={<AdminOrdersPage />} />
+          <Route path="users" element={<AdminUsersPage />} />
+          <Route path="ai" element={<AdminAIPage />} />
         </Route>
       </Routes>
       <Chatbot />

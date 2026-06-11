@@ -1,24 +1,29 @@
 import logging
+import hashlib
+import json
+from concurrent.futures import ThreadPoolExecutor
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
-from django.db.models import Q
+from django.db.models import Q, F
+from django.core.cache import cache
 from .models import Category, Product
 from .serializers import (
     CategorySerializer,
     ProductListSerializer,
     ProductDetailSerializer,
+    ProductSuggestSerializer,
 )
 
 logger = logging.getLogger(__name__)
+executor = ThreadPoolExecutor(max_workers=10)
 
 
 def track_behavior(user_id, action, product_id=None, category_id=None, metadata=None):
-    """Send tracking request to recommendation service (async)."""
+    """Send tracking request to recommendation service (async via thread pool)."""
     import httpx
     import os
-    from threading import Thread
     from product_app.middleware.trace import get_current_trace_id
 
     if not user_id:
@@ -42,9 +47,7 @@ def track_behavior(user_id, action, product_id=None, category_id=None, metadata=
         except Exception as e:
             logger.warning(f"Tracking error: {e}")
 
-    thread = Thread(target=_send)
-    thread.daemon = True
-    thread.start()
+    executor.submit(_send)
 
 
 class HealthCheckView(APIView):
@@ -55,16 +58,30 @@ class HealthCheckView(APIView):
 
 
 class CategoryListView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get(self, request):
+        cache_key = "category_list"
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+
         categories = Category.objects.filter(parent__isnull=True, is_active=True)
         serializer = CategorySerializer(categories, many=True)
-        return Response(serializer.data)
+        data = serializer.data
+        cache.set(cache_key, data, timeout=900)  # Cache for 15 minutes
+        return Response(data)
+
+    def post(self, request):
+        serializer = CategorySerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class CategoryDetailView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get(self, request, pk):
         try:
@@ -74,21 +91,66 @@ class CategoryDetailView(APIView):
         except Category.DoesNotExist:
             return Response({'error': 'Danh mục không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
 
+    def put(self, request, pk):
+        try:
+            category = Category.objects.get(pk=pk)
+            serializer = CategorySerializer(category, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Category.DoesNotExist:
+            return Response({'error': 'Danh mục không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+
+    def delete(self, request, pk):
+        try:
+            category = Category.objects.get(pk=pk)
+            category.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Category.DoesNotExist:
+            return Response({'error': 'Danh mục không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+
 
 class ProductListCreateView(APIView):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
+    def _get_all_descendants_optimized(self, category_id):
+        """Lay tat ca danh muc con dung query duy nhat mot lan de tranh N+1"""
+        all_cats = list(Category.objects.filter(is_active=True).values('id', 'parent_id'))
+        parent_map = {}
+        for cat in all_cats:
+            p_id = cat['parent_id']
+            parent_map.setdefault(p_id, []).append(cat['id'])
+        
+        descendants = []
+        def _recurse(cat_id):
+            for child_id in parent_map.get(cat_id, []):
+                descendants.append(child_id)
+                _recurse(child_id)
+        
+        _recurse(category_id)
+        return descendants
+
     def get(self, request):
+        params = sorted(request.query_params.items())
+        params_hash = hashlib.md5(json.dumps(params).encode('utf-8')).hexdigest()
+        cache_key = f"product_list_{params_hash}"
+
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+
         queryset = Product.objects.filter(status='active').select_related('category').prefetch_related('images')
+        sub_categories = []
 
         category = request.query_params.get('category')
         if category:
-            # Include products from parent category and all its children
             try:
                 cat_obj = Category.objects.get(pk=category)
-                child_ids = cat_obj.children.values_list('id', flat=True)
-                category_ids = [cat_obj.id] + list(child_ids)
+                descendant_ids = self._get_all_descendants_optimized(cat_obj.id)
+                category_ids = [cat_obj.id] + descendant_ids
                 queryset = queryset.filter(category_id__in=category_ids)
+                sub_categories = list(cat_obj.children.filter(is_active=True).values('id', 'name', 'slug'))
             except Category.DoesNotExist:
                 queryset = queryset.filter(category_id=category)
 
@@ -121,12 +183,15 @@ class ProductListCreateView(APIView):
         products = queryset[start:end]
 
         serializer = ProductListSerializer(products, many=True)
-        return Response({
+        response_data = {
             'count': total,
             'page': page,
             'page_size': page_size,
-            'results': serializer.data
-        })
+            'results': serializer.data,
+            'sub_categories': sub_categories
+        }
+        cache.set(cache_key, response_data, timeout=300)  # Cache for 5 minutes
+        return Response(response_data)
 
     def post(self, request):
         serializer = ProductDetailSerializer(data=request.data)
@@ -146,25 +211,44 @@ class ProductDetailView(APIView):
             return None
 
     def get(self, request, pk):
-        product = self.get_object(pk)
-        if not product:
-            return Response({'error': 'Sản phẩm không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+        cache_key = f"product_detail_{pk}"
+        cached_data = cache.get(cache_key)
 
-        product.view_count += 1
-        product.save(update_fields=['view_count'])
+        if cached_data is None:
+            product = self.get_object(pk)
+            if not product:
+                return Response({'error': 'Sản phẩm không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Track view_product behavior
-        if request.user and request.user.is_authenticated:
-            track_behavior(
-                user_id=request.user.id,
-                action='view_product',
-                product_id=pk,
-                category_id=product.category_id,
-                metadata={'product_name': product.name}
-            )
+            serializer = ProductDetailSerializer(product)
+            cached_data = serializer.data
+            cache.set(cache_key, cached_data, timeout=300)  # Cache for 5 minutes
 
-        serializer = ProductDetailSerializer(product)
-        return Response(serializer.data)
+            # Track & increment view_count
+            product.view_count += 1
+            product.save(update_fields=['view_count'])
+
+            if request.user and request.user.is_authenticated:
+                track_behavior(
+                    user_id=request.user.id,
+                    action='view_product',
+                    product_id=pk,
+                    category_id=product.category_id,
+                    metadata={'product_name': product.name}
+                )
+        else:
+            # Cheap update view count in DB without select
+            Product.objects.filter(pk=pk).update(view_count=F('view_count') + 1)
+
+            if request.user and request.user.is_authenticated:
+                track_behavior(
+                    user_id=request.user.id,
+                    action='view_product',
+                    product_id=pk,
+                    category_id=cached_data.get('category', {}).get('id') if cached_data.get('category') else None,
+                    metadata={'product_name': cached_data.get('name')}
+                )
+
+        return Response(cached_data)
 
     def put(self, request, pk):
         product = self.get_object(pk)
@@ -200,28 +284,51 @@ class ProductSearchView(APIView):
         if not query:
             return Response({'error': 'Vui lòng nhập từ khóa tìm kiếm'}, status=status.HTTP_400_BAD_REQUEST)
 
-        products = Product.objects.filter(
-            status='active'
-        ).filter(
-            Q(name__icontains=query) |
-            Q(description__icontains=query) |
-            Q(brand__icontains=query) |
-            Q(sku__icontains=query)
-        ).select_related('category').prefetch_related('images')[:50]
+        # Cache search queries
+        query_hash = hashlib.md5(query.encode('utf-8')).hexdigest()
+        cache_key = f"product_search_{query_hash}"
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+
+        from django.db import connection
+        if connection.vendor == 'postgresql':
+            from django.contrib.postgres.search import SearchVector, SearchQuery
+            vector = SearchVector('name', weight='A') + \
+                     SearchVector('description', weight='B') + \
+                     SearchVector('brand', weight='C') + \
+                     SearchVector('sku', weight='C')
+            search_query = SearchQuery(query)
+            products = Product.objects.annotate(
+                search=vector
+            ).filter(
+                search=search_query,
+                status='active'
+            ).select_related('category').prefetch_related('images')[:50]
+        else:
+            products = Product.objects.filter(
+                status='active'
+            ).filter(
+                Q(name__icontains=query) |
+                Q(description__icontains=query) |
+                Q(brand__icontains=query) |
+                Q(sku__icontains=query)
+            ).select_related('category').prefetch_related('images')[:50]
 
         serializer = ProductListSerializer(products, many=True)
-        return Response({
+        response_data = {
             'query': query,
             'count': len(serializer.data),
             'results': serializer.data
-        })
+        }
+        cache.set(cache_key, response_data, timeout=300)  # Cache for 5 minutes
+        return Response(response_data)
 
 
 class ProductByCategoryView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, category_id):
-        # Include products from category and all its children
         category_name = None
         try:
             cat_obj = Category.objects.get(pk=category_id)
@@ -231,7 +338,6 @@ class ProductByCategoryView(APIView):
         except Category.DoesNotExist:
             category_ids = [category_id]
 
-        # Track view_category behavior
         if request.user and request.user.is_authenticated:
             track_behavior(
                 user_id=request.user.id,
@@ -239,6 +345,14 @@ class ProductByCategoryView(APIView):
                 category_id=category_id,
                 metadata={'category_name': category_name}
             )
+
+        params = sorted(request.query_params.items())
+        params_hash = hashlib.md5(json.dumps(params).encode('utf-8')).hexdigest()
+        cache_key = f"products_by_category_{category_id}_{params_hash}"
+
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
 
         products = Product.objects.filter(
             category_id__in=category_ids,
@@ -254,12 +368,14 @@ class ProductByCategoryView(APIView):
         products = products[start:end]
 
         serializer = ProductListSerializer(products, many=True)
-        return Response({
+        response_data = {
             'count': total,
             'page': page,
             'page_size': page_size,
             'results': serializer.data
-        })
+        }
+        cache.set(cache_key, response_data, timeout=300)  # Cache for 5 minutes
+        return Response(response_data)
 
 
 class TrackClickView(APIView):
@@ -281,3 +397,53 @@ class TrackClickView(APIView):
             return Response({'status': 'tracked'})
 
         return Response({'status': 'skipped', 'reason': 'anonymous user'})
+
+
+class ProductSuggestView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        query = request.query_params.get('q', '')
+        if not query or len(query.strip()) < 2:
+            return Response([])
+
+        clean_query = query.strip().lower()
+        query_hash = hashlib.md5(clean_query.encode('utf-8')).hexdigest()
+        cache_key = f"product_suggest_{query_hash}"
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+
+        from django.db import connection
+        if connection.vendor == 'postgresql':
+            from django.contrib.postgres.search import SearchVector, SearchQuery
+            vector = SearchVector('name', weight='A') + SearchVector('brand', weight='B')
+            
+            # Use raw prefix query for autocomplete (e.g. 'sams:*')
+            # For multi-word queries in postgres tsquery, we join them with &
+            words = [word for word in clean_query.split() if word]
+            if words:
+                words[-1] = f"{words[-1]}:*"
+                raw_query = " & ".join(words)
+            else:
+                raw_query = f"{clean_query}:*"
+            
+            search_query = SearchQuery(raw_query, search_type='raw')
+            products = Product.objects.annotate(
+                search=vector
+            ).filter(
+                search=search_query,
+                status='active'
+            ).select_related('category').prefetch_related('images')[:6]
+        else:
+            products = Product.objects.filter(
+                status='active'
+            ).filter(
+                Q(name__icontains=clean_query) |
+                Q(brand__icontains=clean_query)
+            ).select_related('category').prefetch_related('images')[:6]
+
+        serializer = ProductSuggestSerializer(products, many=True, context={'request': request})
+        data = serializer.data
+        cache.set(cache_key, data, timeout=600)  # 10 minutes cache
+        return Response(data)

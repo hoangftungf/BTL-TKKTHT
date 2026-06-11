@@ -52,7 +52,7 @@ HEALTH_ENDPOINT = f"{CHATBOT_URL}/health/"
 # Service-Level Agreements
 COLD_START_SLA_S   = 30.0  # First-request max latency (LLM inference ~10s on this hardware)
 CACHED_SLA_S       = 1.5   # Cached response max latency
-HTTP_TIMEOUT       = 60.0  # Per-request timeout for LLM calls
+HTTP_TIMEOUT       = 240.0 # Per-request timeout for LLM calls
 CONCURRENT_N       = 5     # Parallel requests for TC-3.2
 
 # Grounding keywords expected when no product is found

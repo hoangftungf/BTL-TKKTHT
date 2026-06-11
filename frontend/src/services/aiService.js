@@ -42,6 +42,15 @@ export const recommendationService = {
 
   recordInteraction: (data) =>
     api.post('/recommendations/interaction/', data),
+
+  getGraphStats: () =>
+    api.get('/recommendations/graph/stats/'),
+
+  syncGraph: () =>
+    api.post('/recommendations/graph/sync/'),
+
+  trainAllModels: () =>
+    api.post('/recommendations/train-all/'),
 };
 
 // AI Search Service
@@ -72,6 +81,12 @@ export const chatbotService = {
 
   getConversation: (conversationId) =>
     api.get(`/chatbot/conversations/${conversationId}/`),
+
+  getConversations: () =>
+    api.get('/chatbot/conversations/'),
+
+  deleteConversation: (conversationId) =>
+    api.delete(`/chatbot/conversations/${conversationId}/`),
 
   getFAQs: (category = null) =>
     api.get(`/chatbot/faqs/${category ? `?category=${category}` : ''}`),

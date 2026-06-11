@@ -5,7 +5,9 @@ from rest_framework import authentication, exceptions
 class JWTUser:
     def __init__(self, payload):
         self.id = payload.get('user_id')
+        self.role = payload.get('role', 'customer')
         self.is_authenticated = True
+        self.is_staff = payload.get('is_staff', False)
 
 class JWTAuthentication(authentication.BaseAuthentication):
     def authenticate(self, request):

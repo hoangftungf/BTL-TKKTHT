@@ -23,6 +23,10 @@ class RegisterView(APIView):
         if serializer.is_valid():
             user = serializer.save()
             refresh = RefreshToken.for_user(user)
+            # Add custom claims
+            refresh['role'] = user.role
+            refresh['email'] = user.email
+            refresh['is_staff'] = user.role in ['admin', 'seller']
             return Response({
                 'message': 'Đăng ký thành công',
                 'user': UserSerializer(user).data,
@@ -51,6 +55,10 @@ class LoginView(APIView):
             user.save(update_fields=['last_login_ip'])
 
             refresh = RefreshToken.for_user(user)
+            # Add custom claims
+            refresh['role'] = user.role
+            refresh['email'] = user.email
+            refresh['is_staff'] = user.role in ['admin', 'seller']
             return Response({
                 'message': 'Đăng nhập thành công',
                 'user': UserSerializer(user).data,
@@ -86,6 +94,35 @@ class MeView(APIView):
 
     def put(self, request):
         serializer = UserSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserAdminListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if getattr(request.user, 'role', 'customer') != 'admin':
+            return Response({'error': 'Bạn không có quyền thực hiện thao tác này'}, status=status.HTTP_403_FORBIDDEN)
+        users = User.objects.all().order_by('-created_at')
+        serializer = UserSerializer(users, many=True)
+        return Response(serializer.data)
+
+
+class UserAdminDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, pk):
+        if getattr(request.user, 'role', 'customer') != 'admin':
+            return Response({'error': 'Bạn không có quyền thực hiện thao tác này'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({'error': 'Người dùng không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = UserSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)

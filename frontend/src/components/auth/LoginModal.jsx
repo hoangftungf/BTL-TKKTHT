@@ -25,7 +25,23 @@ const LoginModal = () => {
 
   useEffect(() => {
     if (error) {
-      toast.error(error);
+      let errorMsg = 'Đăng nhập thất bại';
+      if (typeof error === 'string') {
+        errorMsg = error;
+      } else if (typeof error === 'object') {
+        const messages = [];
+        Object.values(error).forEach(val => {
+          if (Array.isArray(val)) {
+            messages.push(...val.map(v => String(v)));
+          } else if (val) {
+            messages.push(String(val));
+          }
+        });
+        if (messages.length > 0) {
+          errorMsg = messages.join(', ');
+        }
+      }
+      toast.error(errorMsg);
       dispatch(clearError());
     }
   }, [error, dispatch]);

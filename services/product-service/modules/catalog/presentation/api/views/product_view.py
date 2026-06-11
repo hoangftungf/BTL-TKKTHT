@@ -15,6 +15,7 @@ from ..serializers.product_serializer import (
     ProductCreateSerializer,
     ProductUpdateSerializer,
 )
+from ..serializers.category_serializer import CategorySerializer
 
 
 def get_product_service() -> ProductService:
@@ -64,11 +65,14 @@ class ProductListView(APIView):
         )
 
         serializer = ProductListSerializer(result['products'], many=True)
+        sub_categories_data = CategorySerializer(result.get('sub_categories', []), many=True).data
+
         return Response({
             'count': result['total'],
             'page': result['page'],
             'page_size': result['page_size'],
-            'results': serializer.data
+            'results': serializer.data,
+            'sub_categories': sub_categories_data
         })
 
     def post(self, request):
