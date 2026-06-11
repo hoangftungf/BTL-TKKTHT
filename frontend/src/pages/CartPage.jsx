@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchCart, clearCart } from '../store/slices/cartSlice';
 import CartItem from '../components/cart/CartItem';
-import Loading from '../components/common/Loading';
 import Empty from '../components/common/Empty';
 import ProductRecommendations from '../components/product/ProductRecommendations';
 import { ShoppingBagIcon, TrashIcon } from '@heroicons/react/24/outline';
@@ -13,8 +12,9 @@ import toast from 'react-hot-toast';
 const CartPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { items, totalItems, totalAmount, loading } = useSelector((state) => state.cart);
+  const { items, totalItems, totalAmount } = useSelector((state) => state.cart);
   const { isAuthenticated } = useSelector((state) => state.auth);
+
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -39,10 +39,6 @@ const CartPage = () => {
     }
     navigate('/checkout');
   };
-
-  if (loading) {
-    return <Loading />;
-  }
 
   if (!items || items.length === 0) {
     return (
@@ -114,25 +110,24 @@ const CartPage = () => {
         </div>
       </div>
 
-      {/* AI Recommendations based on cart items */}
-      {items && items.length > 0 && (
-        <div className="mt-12 border-t border-gray-200">
-          {/* Similar to first item in cart */}
+      {/* AI Recommendations - always shown, not gated by cart items */}
+      <div className="mt-12 border-t border-gray-200">
+        {/* Similar to first item in cart */}
+        {items && items.length > 0 && (
           <ProductRecommendations
             productId={items[0]?.product?.id || items[0]?.product_id}
             type="similar"
             title="Co the ban cung thich"
             limit={6}
           />
-
-          {/* Trending products */}
-          <ProductRecommendations
-            type="trending"
-            title="San pham ban chay"
-            limit={6}
-          />
-        </div>
-      )}
+        )}
+        {/* Trending products - luôn hiển thị, không bị unmount */}
+        <ProductRecommendations
+          type="trending"
+          title="San pham ban chay"
+          limit={6}
+        />
+      </div>
     </div>
   );
 };

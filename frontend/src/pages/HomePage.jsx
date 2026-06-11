@@ -22,7 +22,7 @@ import {
 
 const HomePage = () => {
   const dispatch = useDispatch();
-  const { featuredProducts, categories, loading } = useSelector((state) => state.product);
+  const { featuredProducts, categories } = useSelector((state) => state.product);
   const { user } = useSelector((state) => state.auth);
 
   useEffect(() => {
@@ -127,7 +127,7 @@ const HomePage = () => {
                   Xem tất cả <ChevronRight className="w-4 h-4" />
                 </Link>
               </div>
-              <ProductGrid products={featuredProducts} loading={loading} />
+              <ProductGrid products={featuredProducts} loading={featuredProducts.length === 0} />
             </section>
           </div>
         </div>

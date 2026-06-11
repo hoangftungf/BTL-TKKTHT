@@ -95,27 +95,25 @@ const SearchPage = () => {
         emptyMessage={`Khong tim thay san pham cho "${query}"`}
       />
 
-      {/* AI Recommendations */}
-      {!loading && (
-        <div className="mt-12 border-t border-gray-200">
-          {/* Personalized recommendations if logged in */}
-          {isAuthenticated && user?.id && (
-            <ProductRecommendations
-              userId={user.id}
-              type="personalized"
-              title="Goi y danh cho ban"
-              limit={6}
-            />
-          )}
-
-          {/* Trending products */}
+      {/* AI Recommendations - luôn render, không gated bởi loading */}
+      <div className="mt-12 border-t border-gray-200">
+        {/* Personalized recommendations if logged in */}
+        {isAuthenticated && user?.id && (
           <ProductRecommendations
-            type="trending"
-            title="San pham pho bien"
+            userId={user.id}
+            type="personalized"
+            title="Goi y danh cho ban"
             limit={6}
           />
-        </div>
-      )}
+        )}
+
+        {/* Trending products */}
+        <ProductRecommendations
+          type="trending"
+          title="San pham pho bien"
+          limit={6}
+        />
+      </div>
     </div>
   );
 };
