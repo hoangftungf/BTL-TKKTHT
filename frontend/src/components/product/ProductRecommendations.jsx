@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { recommendationService } from '../../services/aiService';
 import { formatPrice } from '../../utils/format';
@@ -22,56 +22,72 @@ const ProductRecommendations = ({
   const dispatch = useDispatch();
   const { isAuthenticated } = useSelector((state) => state.auth);
 
+  // Dùng ref để theo dõi mount state, tránh setState sau khi unmount
+  const isMountedRef = useRef(true);
+
   useEffect(() => {
-    fetchRecommendations();
-  }, [productId, userId, type]);
+    isMountedRef.current = true;
 
-  const fetchRecommendations = async () => {
-    setLoading(true);
-    setError(null);
+    const fetchRecommendations = async () => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      let response;
+      try {
+        let response;
 
-      switch (type) {
-        case 'similar':
-          if (!productId) {
-            setProducts([]);
-            setLoading(false);
-            return;
-          }
-          response = await recommendationService.getSimilar(productId, limit);
-          break;
+        switch (type) {
+          case 'similar':
+            if (!productId) {
+              setProducts([]);
+              setLoading(false);
+              return;
+            }
+            response = await recommendationService.getSimilar(productId, limit);
+            break;
 
-        case 'personalized':
-          if (!userId) {
-            // Fallback to trending if no user
+          case 'personalized':
+            if (!userId) {
+              response = await recommendationService.getTrending(limit);
+            } else {
+              response = await recommendationService.getPersonalized(userId, limit);
+            }
+            break;
+
+          case 'trending':
             response = await recommendationService.getTrending(limit);
-          } else {
-            response = await recommendationService.getPersonalized(userId, limit);
-          }
-          break;
+            break;
 
-        case 'trending':
-          response = await recommendationService.getTrending(limit);
-          break;
+          default:
+            response = await recommendationService.getTrending(limit);
+        }
 
-        default:
-          response = await recommendationService.getTrending(limit);
+        const data = response.data;
+        const productList = data.products || data.recommendations || data.results || data.trending || [];
+
+        // Chỉ cập nhật state nếu component vẫn còn mounted
+        if (isMountedRef.current) {
+          setProducts(productList);
+        }
+      } catch (err) {
+        console.error('Failed to fetch recommendations:', err);
+        if (isMountedRef.current) {
+          setError('Khong the tai goi y');
+          setProducts([]);
+        }
+      } finally {
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
       }
+    };
 
-      const data = response.data;
-      // Handle different response formats
-      const productList = data.products || data.recommendations || data.results || [];
-      setProducts(productList);
-    } catch (err) {
-      console.error('Failed to fetch recommendations:', err);
-      setError('Khong the tai goi y');
-      setProducts([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+    fetchRecommendations();
+
+    return () => {
+      isMountedRef.current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productId, userId, type, limit]);
 
   const handleAddToCart = (e, product) => {
     e.preventDefault();
@@ -111,15 +127,12 @@ const ProductRecommendations = ({
   }
 
   return (
-    <div className="py-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-        {type === 'similar' && (
-          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
-            AI Recommendation
-          </span>
-        )}
-      </div>
+    <div className="py-2">
+      {title && (
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {products.slice(0, limit).map((product, idx) => {
@@ -132,7 +145,7 @@ const ProductRecommendations = ({
 
           return (
             <Link
-              key={idx}
+              key={pid ?? idx}
               to={`/products/${pid}`}
               className="group bg-white rounded-lg border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
             >
@@ -188,4 +201,4 @@ const ProductRecommendations = ({
   );
 };
 
-export default ProductRecommendations;
+export default React.memo(ProductRecommendations);

@@ -6,6 +6,7 @@ const initialState = {
   featuredProducts: [],
   currentProduct: null,
   categories: [],
+  subCategories: [],
   pagination: {
     page: 1,
     pageSize: 20,
@@ -19,6 +20,7 @@ const initialState = {
     ordering: '-created_at',
   },
   loading: false,
+  detailLoading: false, // loading riêng cho fetchProductById, tránh ảnh hưởng loading chung
   error: null,
 };
 
@@ -90,6 +92,7 @@ const productSlice = createSlice({
       .addCase(fetchProducts.fulfilled, (state, action) => {
         state.loading = false;
         state.products = action.payload.results;
+        state.subCategories = action.payload.sub_categories || [];
         state.pagination = {
           page: action.payload.page,
           pageSize: action.payload.page_size,
@@ -100,16 +103,16 @@ const productSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      // Fetch Product by ID
+      // Fetch Product by ID — dùng detailLoading riêng để không gây re-render toàn trang
       .addCase(fetchProductById.pending, (state) => {
-        state.loading = true;
+        state.detailLoading = true;
       })
       .addCase(fetchProductById.fulfilled, (state, action) => {
-        state.loading = false;
+        state.detailLoading = false;
         state.currentProduct = action.payload;
       })
       .addCase(fetchProductById.rejected, (state, action) => {
-        state.loading = false;
+        state.detailLoading = false;
         state.error = action.payload;
       })
       // Categories
