@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { addToWishlist, removeFromWishlist } from '../../store/slices/wishlistSlice';
@@ -7,10 +8,12 @@ import { Heart } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatPrice } from '../../utils/format';
 
-const ProductCard = ({ product }) => {
+const ProductCard = ({ product: rawProduct }) => {
   const dispatch = useDispatch();
   const { isAuthenticated } = useSelector((state) => state.auth);
   const { productIds: wishlistIds } = useSelector((state) => state.wishlist);
+
+  const product = rawProduct?.product || rawProduct?.data || rawProduct || {};
 
   const isInWishlist = wishlistIds.includes(product.id);
 
@@ -34,7 +37,21 @@ const ProductCard = ({ product }) => {
     }
   };
 
-  const primaryImage = product.primary_image?.image || product.image || '/placeholder.png';
+  const primaryImage = product.primary_image?.image || 
+                       product.image || 
+                       (product.images && product.images.length > 0 ? (product.images.find(img => img.is_primary)?.image || product.images[0]?.image) : null) || 
+                       '/placeholder.png';
+
+  // Quản lý fallback ảnh bằng state - tránh re-render loop
+  const [imgSrc, setImgSrc] = useState(primaryImage || '/placeholder.png');
+  const [imgFailed, setImgFailed] = useState(false);
+
+  const handleImgError = useCallback(() => {
+    if (!imgFailed) {
+      setImgFailed(true);
+      setImgSrc('/placeholder.png');
+    }
+  }, [imgFailed]);
 
   return (
     <Link 
@@ -44,9 +61,10 @@ const ProductCard = ({ product }) => {
       {/* Image Container */}
       <div className="relative aspect-square overflow-hidden bg-gray-50 rounded-t-lg">
         <img
-          src={primaryImage}
+          src={imgSrc}
           alt={product.name}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          onError={handleImgError}
         />
         {product.is_on_sale && product.discount_percent > 0 && (
           <span className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">

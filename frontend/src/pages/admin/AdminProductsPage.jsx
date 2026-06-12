@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { Tree } from 'antd';
 import productService from '../../services/productService';
 import {
   PlusIcon,
@@ -8,8 +9,6 @@ import {
   MagnifyingGlassIcon,
   FunnelIcon,
   ArrowPathIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
   FolderIcon,
   TagIcon,
   XMarkIcon,
@@ -33,7 +32,7 @@ const AdminProductsPage = () => {
   // Category states
   const [categories, setCategories] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
-  const [expandedCategories, setExpandedCategories] = useState({});
+
 
   // Modal/Form states
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -287,62 +286,91 @@ const AdminProductsPage = () => {
     }
   };
 
-  // Category Collapsible Tree Helpers
-  const toggleCategoryExpand = (id) => {
-    setExpandedCategories(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
+  // Category tree helpers & handlers
+  const findCategoryNode = (cats, id) => {
+    for (const cat of cats) {
+      if (cat.id === id) return cat;
+      if (cat.children && cat.children.length > 0) {
+        const found = findCategoryNode(cat.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
   };
 
-  // Render Recursive Category Items
-  const renderCategoryNode = (category, depth = 0) => {
-    const hasChildren = category.children && category.children.length > 0;
-    const isExpanded = expandedCategories[category.id];
+  const onDrop = async (info) => {
+    const dragKey = info.dragNode.key;
+    const dropKey = info.node.key;
+    const dropPos = info.node.pos.split('-');
+    const dropPosition = info.dropPosition - Number(dropPos[dropPos.length - 1]);
 
-    return (
-      <div key={category.id} className="select-none">
-        <div 
-          className="flex items-center justify-between py-3 px-4 hover:bg-slate-900/60 rounded-xl border border-slate-800/40 my-1.5 transition-colors"
-          style={{ marginLeft: `${depth * 24}px` }}
-        >
+    if (dragKey === dropKey) return;
+
+    let newParent = null;
+    let newDisplayOrder = 0;
+
+    const dragNodeObj = findCategoryNode(categories, dragKey);
+    const dropNodeObj = findCategoryNode(categories, dropKey);
+
+    if (!dragNodeObj || !dropNodeObj) return;
+
+    const loadingToast = toast.loading('Đang cập nhật cấu trúc danh mục...');
+
+    try {
+      if (info.dropToGap) {
+        newParent = dropNodeObj.parent || null;
+        newDisplayOrder = dropNodeObj.display_order + (dropPosition > 0 ? 1 : -1);
+        if (newDisplayOrder < 0) newDisplayOrder = 0;
+      } else {
+        newParent = dropKey;
+        newDisplayOrder = dropNodeObj.children ? dropNodeObj.children.length : 0;
+      }
+
+      await productService.updateCategory(dragKey, {
+        parent: newParent,
+        display_order: newDisplayOrder
+      });
+
+      toast.success('Cập nhật cấu trúc danh mục thành công!', { id: loadingToast });
+      fetchCategoriesData();
+    } catch (err) {
+      console.error('Update category hierarchy error:', err);
+      toast.error('Không thể cập nhật cấu trúc danh mục', { id: loadingToast });
+    }
+  };
+
+  const getTreeData = (cats) => {
+    return cats.map(cat => ({
+      title: (
+        <div className="flex items-center justify-between py-2 px-3 hover:bg-slate-900/30 rounded-xl border border-slate-800/20 my-0.5 transition-all duration-150 w-full group select-none">
           <div className="flex items-center space-x-3 min-w-0">
-            {hasChildren ? (
-              <button 
-                onClick={() => toggleCategoryExpand(category.id)}
-                className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
-              >
-                {isExpanded ? <ChevronDownIcon className="w-4 h-4" /> : <ChevronRightIcon className="w-4 h-4" />}
-              </button>
-            ) : (
-              <FolderIcon className="w-4 h-4 text-slate-600 flex-shrink-0" />
-            )}
-            <span className="font-semibold text-white truncate text-sm">{category.name}</span>
-            <span className="text-slate-500 text-xs truncate">/{category.slug}</span>
+            <FolderIcon className="w-4.5 h-4.5 text-indigo-400 flex-shrink-0" />
+            <span className="font-semibold text-slate-100 truncate text-sm">{cat.name}</span>
+            <span className="text-slate-500 text-xs truncate">/{cat.slug}</span>
             <span className="bg-slate-800 text-[10px] text-slate-400 px-2 py-0.5 rounded-full font-medium">
-              {category.product_count || 0} sản phẩm
+              {cat.product_count || 0} sản phẩm
             </span>
           </div>
-
-          <div className="flex items-center space-x-2">
+          <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-2 transition-opacity duration-200">
             <button 
-              onClick={() => handleDeleteCategory(category.id)}
-              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-950/20 hover:text-rose-400 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteCategory(cat.id);
+              }}
+              className="p-1 rounded text-rose-500 hover:bg-rose-950/20 hover:text-rose-400 transition-colors"
               title="Xóa danh mục"
             >
-              <TrashIcon className="w-4.5 h-4.5" />
+              <TrashIcon className="w-4 h-4" />
             </button>
           </div>
         </div>
-
-        {hasChildren && isExpanded && (
-          <div className="border-l border-slate-800 ml-5.5 my-0.5 pl-1.5">
-            {category.children.map(child => renderCategoryNode(child, depth + 1))}
-          </div>
-        )}
-      </div>
-    );
+      ),
+      key: cat.id,
+      children: cat.children && cat.children.length > 0 ? getTreeData(cat.children) : []
+    }));
   };
+
+  const treeData = getTreeData(categories);
 
   // Helper to get flat categories list for dropdown options (recursive)
   const getFlatCategories = (cats, prefix = '') => {
@@ -607,8 +635,14 @@ const AdminProductsPage = () => {
           ) : (
             <div className="max-w-3xl">
               <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-wider">Cơ cấu cây danh mục (Category Tree)</h3>
-              <div className="space-y-1">
-                {categories.map(cat => renderCategoryNode(cat))}
+              <div className="admin-category-tree mt-4">
+                <Tree
+                  draggable
+                  blockNode
+                  onDrop={onDrop}
+                  treeData={treeData}
+                  className="bg-transparent text-slate-200"
+                />
               </div>
             </div>
           )}

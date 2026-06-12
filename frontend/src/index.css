@@ -139,3 +139,36 @@
   padding-inline-start: 12px !important;
 }
 
+/* Ant Design Tree Dark Theme Overrides for Admin Panel */
+.admin-category-tree .ant-tree {
+  background: transparent !important;
+  color: #cbd5e1 !important;
+}
+
+.admin-category-tree .ant-tree .ant-tree-node-content-wrapper {
+  background: transparent !important;
+  color: inherit !important;
+  width: 100% !important;
+}
+
+.admin-category-tree .ant-tree .ant-tree-node-content-wrapper:hover {
+  background: transparent !important;
+}
+
+.admin-category-tree .ant-tree-treenode-checkbox-checked .ant-tree-node-content-wrapper,
+.admin-category-tree .ant-tree-treenode-selected .ant-tree-node-content-wrapper {
+  background: transparent !important;
+}
+
+.admin-category-tree .ant-tree .ant-tree-switcher {
+  background: transparent !important;
+  color: #94a3b8 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.admin-category-tree .ant-tree-drop-indicator {
+  background-color: #6366f1 !important; /* indigo-500 */
+}
+

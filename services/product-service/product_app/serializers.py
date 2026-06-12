@@ -79,6 +79,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     is_on_sale = serializers.BooleanField(read_only=True)
     discount_percent = serializers.IntegerField(read_only=True)
     is_low_stock = serializers.BooleanField(read_only=True)
+    primary_image = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -87,10 +88,19 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             'price', 'compare_price', 'cost_price', 'category', 'category_id',
             'brand', 'status', 'stock_quantity', 'low_stock_threshold', 'weight',
             'is_featured', 'view_count', 'sold_count', 'rating_avg', 'rating_count',
-            'seller_id', 'images', 'variants', 'is_on_sale', 'discount_percent',
+            'seller_id', 'images', 'primary_image', 'variants', 'is_on_sale', 'discount_percent',
             'is_low_stock', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'view_count', 'sold_count', 'rating_avg', 'rating_count', 'created_at', 'updated_at']
+
+    def get_primary_image(self, obj):
+        primary = obj.images.filter(is_primary=True).first()
+        if primary:
+            return ProductImageSerializer(primary).data
+        first_image = obj.images.first()
+        if first_image:
+            return ProductImageSerializer(first_image).data
+        return None
 
     def create(self, validated_data):
         category_id = validated_data.pop('category_id', None)

@@ -46,8 +46,44 @@ class HealthCheckView(APIView):
 class CartView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def get_product_info(self, product_id):
+        try:
+            response = httpx.get(f"{settings.PRODUCT_SERVICE_URL}/{product_id}/", timeout=5.0)
+            if response.status_code == 200:
+                return response.json()
+        except Exception:
+            pass
+        return None
+
     def get(self, request):
         cart, _ = Cart.objects.prefetch_related('items').get_or_create(user_id=request.user.id)
+        
+        # Self-healing logic for items that have empty product_image
+        healed = False
+        for item in cart.items.all():
+            if not item.product_image:
+                product = self.get_product_info(item.product_id)
+                if product:
+                    img_url = ''
+                    if product.get('primary_image'):
+                        img_url = product.get('primary_image', {}).get('image', '')
+                    elif product.get('images'):
+                        images = product.get('images', [])
+                        primary_img = next((img for img in images if img.get('is_primary')), None)
+                        if primary_img:
+                            img_url = primary_img.get('image', '')
+                        elif images:
+                            img_url = images[0].get('image', '')
+                    
+                    if img_url:
+                        item.product_image = img_url
+                        item.save()
+                        healed = True
+        
+        if healed:
+            # Reload cart to reflect updated product images
+            cart, _ = Cart.objects.prefetch_related('items').get_or_create(user_id=request.user.id)
+
         serializer = CartSerializer(cart)
         return Response(serializer.data)
 
@@ -77,13 +113,25 @@ class CartItemView(APIView):
         if product.get('stock_quantity', 0) < quantity:
             return Response({'error': 'Sản phẩm không đủ số lượng'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Extract product image URL safely with fallback
+        img_url = ''
+        if product.get('primary_image'):
+            img_url = product.get('primary_image', {}).get('image', '')
+        elif product.get('images'):
+            images = product.get('images', [])
+            primary_img = next((img for img in images if img.get('is_primary')), None)
+            if primary_img:
+                img_url = primary_img.get('image', '')
+            elif images:
+                img_url = images[0].get('image', '')
+
         item, created = CartItem.objects.get_or_create(
             cart=cart,
             product_id=product_id,
             variant_id=variant_id,
             defaults={
                 'product_name': product.get('name', ''),
-                'product_image': product.get('primary_image', {}).get('image', '') if product.get('primary_image') else '',
+                'product_image': img_url,
                 'price': product.get('price', 0),
                 'quantity': quantity,
             }

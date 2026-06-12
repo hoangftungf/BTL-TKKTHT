@@ -51,3 +51,4 @@ class CreateOrderSerializer(serializers.Serializer):
     shipping_ward = serializers.CharField(max_length=100)
     payment_method = serializers.ChoiceField(choices=Order.PAYMENT_METHOD_CHOICES)
     note = serializers.CharField(required=False, allow_blank=True)
+    selected_item_ids = serializers.ListField(child=serializers.UUIDField(), required=False)

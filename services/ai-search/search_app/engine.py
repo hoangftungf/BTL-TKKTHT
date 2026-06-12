@@ -74,11 +74,39 @@ class VietnameseNLP:
         return [w[0] for w in sorted_words[:max_keywords]]
 
 
+import difflib
+import json
+
+HARDCODED_SYNONYMS = {
+    'giay the thao': ['sneaker', 'giay the thao', 'giay thê thao', 'giay chay bo'],
+    'sneaker': ['giay the thao', 'giay chay bo'],
+    'but bi': ['viet bi', 'viêt bi', 'but bi'],
+    'viet bi': ['but bi', 'bút bi'],
+    'tai nghe khong day': ['true wireless', 'tws', 'tai nghe bluetooth', 'tai nghe khong day', 'airpods'],
+    'true wireless': ['tai nghe khong day', 'tws', 'tai nghe bluetooth'],
+    'tws': ['tai nghe khong day', 'true wireless', 'tai nghe bluetooth'],
+    'dien thoai': ['smartphone', 'dien thoai', 'dt', 'iphone', 'samsung'],
+    'smartphone': ['dien thoai', 'dt', 'iphone', 'samsung'],
+    'may tinh bang': ['ipad', 'tablet', 'may tinh bang'],
+    'tablet': ['may tinh bang', 'ipad'],
+    'ipad': ['may tinh bang', 'tablet'],
+    'may tinh xach tay': ['laptop', 'macbook', 'may tinh xach tay'],
+    'laptop': ['may tinh xach tay', 'macbook'],
+    'macbook': ['laptop', 'may tinh xach tay'],
+    'ao thun': ['t-shirt', 'ao thun', 'ao phong', 'ao pull'],
+    't-shirt': ['ao thun', 'ao phong'],
+    'ao phong': ['ao thun', 't-shirt'],
+    'binh giu nhiet': ['binh nuoc', 'ly giu nhiet', 'binh giu nhiet', 'ly nuoc'],
+    'binh nuoc': ['binh giu nhiet', 'ly giu nhiet', 'binh nuoc'],
+    'ly giu nhiet': ['binh giu nhiet', 'binh nuoc']
+}
+
+
 class SearchEngine:
     """
     Smart Search Engine với:
     1. Full-text search
-    2. Fuzzy matching
+    2. Fuzzy matching & Typo tolerance
     3. Synonym expansion
     4. Query understanding
     """
@@ -91,7 +119,7 @@ class SearchEngine:
         """
         Tìm kiếm thông minh
         """
-        from .models import ProductIndex, SearchHistory
+        from .models import ProductIndex, SearchHistory, Synonym
 
         if not query:
             return {'results': [], 'total': 0}
@@ -109,6 +137,33 @@ class SearchEngine:
         if cached:
             return cached
 
+        # Synonym Expansion
+        expanded_keywords = {query_normalized}
+        for token in query_tokens:
+            expanded_keywords.add(token)
+
+        # Load from DB synonyms
+        try:
+            db_synonyms = Synonym.objects.filter(
+                Q(word__iexact=query_normalized) | Q(word__in=query_tokens)
+            )
+            for syn_obj in db_synonyms:
+                try:
+                    words_list = json.loads(syn_obj.synonyms)
+                    for w in words_list:
+                        expanded_keywords.add(self.nlp.normalize(w))
+                except Exception:
+                    for w in syn_obj.synonyms.split(','):
+                        expanded_keywords.add(self.nlp.normalize(w.strip()))
+        except Exception as e:
+            logger.error(f"Error loading DB synonyms: {e}")
+
+        # Fallback to hardcoded synonyms
+        for kw in list(expanded_keywords):
+            if kw in HARDCODED_SYNONYMS:
+                for syn in HARDCODED_SYNONYMS[kw]:
+                    expanded_keywords.add(self.nlp.normalize(syn))
+
         # Build search query
         q_objects = Q()
 
@@ -116,14 +171,14 @@ class SearchEngine:
         q_objects |= Q(name__icontains=query)
         q_objects |= Q(name_normalized__icontains=query_normalized)
 
-        # Token matching
-        for token in query_tokens:
-            q_objects |= Q(name_normalized__icontains=token)
-            q_objects |= Q(keywords__icontains=token)
-            q_objects |= Q(brand__icontains=token)
-            q_objects |= Q(category__icontains=token)
+        # Token & Synonym matching
+        for kw in expanded_keywords:
+            q_objects |= Q(name_normalized__icontains=kw)
+            q_objects |= Q(keywords__icontains=kw)
+            q_objects |= Q(brand__icontains=kw)
+            q_objects |= Q(category__icontains=kw)
 
-        # Apply filters
+        # Apply filters & query
         queryset = ProductIndex.objects.filter(q_objects)
 
         if filters:
@@ -135,6 +190,43 @@ class SearchEngine:
                 queryset = queryset.filter(price__gte=filters['min_price'])
             if filters.get('max_price'):
                 queryset = queryset.filter(price__lte=filters['max_price'])
+
+        # Fuzzy Matching fallback (Typo Tolerance) if no results found
+        if queryset.count() == 0:
+            all_indices = ProductIndex.objects.all().values(
+                'id', 'product_id', 'name', 'name_normalized', 'brand', 'category', 'price', 'popularity_score'
+            )
+            matched_items = []
+            for item in all_indices:
+                name_norm = item['name_normalized'] or ''
+                brand_norm = self.nlp.normalize(item['brand']) if item['brand'] else ''
+                cat_norm = self.nlp.normalize(item['category']) if item['category'] else ''
+
+                ratio_name = difflib.SequenceMatcher(None, query_normalized, name_norm).ratio()
+                ratio_brand = difflib.SequenceMatcher(None, query_normalized, brand_norm).ratio() if brand_norm else 0
+                ratio_cat = difflib.SequenceMatcher(None, query_normalized, cat_norm).ratio() if cat_norm else 0
+
+                best_ratio = max(ratio_name, ratio_brand, ratio_cat)
+
+                query_words = query_normalized.split()
+                name_words = name_norm.split()
+
+                word_matches = 0
+                for qw in query_words:
+                    close = difflib.get_close_matches(qw, name_words, n=1, cutoff=0.7)
+                    if close:
+                        word_matches += 1
+
+                word_ratio = word_matches / len(query_words) if query_words else 0
+
+                if best_ratio >= 0.6 or word_ratio >= 0.65:
+                    score = max(best_ratio, word_ratio) * 0.8 + (float(item['popularity_score'] or 0) / 100.0) * 0.2
+                    matched_items.append((item['id'], score))
+
+            if matched_items:
+                matched_items.sort(key=lambda x: x[1], reverse=True)
+                best_ids = [x[0] for x in matched_items[:limit]]
+                queryset = ProductIndex.objects.filter(id__in=best_ids)
 
         # Score and sort
         queryset = queryset.order_by('-popularity_score')

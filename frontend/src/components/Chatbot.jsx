@@ -8,7 +8,7 @@ const Chatbot = () => {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: 'Xin chao! Toi la tro ly AI cua shop. Toi co the giup gi cho ban?',
+      content: 'Xin chào! Tôi là trợ lý AI của shop. Tôi có thể giúp gì cho bạn?',
       products: null,
       boughtTogether: null,
     },
@@ -76,7 +76,7 @@ const Chatbot = () => {
         ...prev,
         {
           role: 'assistant',
-          content: 'Xin loi, da co loi xay ra. Vui long thu lai sau.',
+          content: 'Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại!',
         },
       ]);
     } finally {

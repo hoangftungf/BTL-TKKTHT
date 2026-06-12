@@ -45,34 +45,45 @@ const HomePage = () => {
     return <Box className="w-4 h-4 text-gray-500" />;
   };
 
-  const getSubcategories = (name) => {
-    const n = name.toLowerCase();
-    if (n.includes('thoại')) return ['Apple iPhone', 'Samsung Galaxy', 'Xiaomi', 'Oppo', 'Phụ kiện điện thoại'];
-    if (n.includes('lap')) return ['MacBook Air', 'Asus Gaming', 'Dell Latitude', 'HP ProBook', 'Phụ kiện Laptop'];
-    if (n.includes('trang')) return ['Thời trang nam', 'Thời trang nữ', 'Phụ kiện', 'Túi xách hot'];
-    if (n.includes('sách')) return ['Sách Ngoại Ngữ', 'Sách Kỹ Năng', 'Sách Tiểu Thuyết', 'Sách Giáo Khoa'];
-    if (n.includes('dụng')) return ['Bếp ga, bếp từ', 'Nồi chiên không dầu', 'Đồ dùng nhà bếp'];
-    if (n.includes('mỹ')) return ['Kem chống nắng', 'Son môi chính hãng', 'Sữa rửa mặt', 'Nước tẩy trang'];
-    return ['Sản phẩm bán chạy', 'Hàng mới về', 'Khuyến mãi hot'];
-  };
-
   const menuItems = categories.map((category) => {
-    const subs = getSubcategories(category.name);
+    const hasChildren = category.children && category.children.length > 0;
+    
     return {
       key: category.id,
       label: <span className="font-semibold text-gray-700 text-sm">{category.name}</span>,
       icon: getCategoryIcon(category.name),
-      children: subs.map((sub, idx) => ({
-        key: `${category.id}-sub-${idx}`,
-        label: (
-          <Link 
-            to={`/products?category=${category.id}&q=${encodeURIComponent(sub)}`}
-            className="text-xs text-gray-600 hover:text-blue-600 block w-full py-0.5"
-          >
-            {sub}
-          </Link>
-        )
-      }))
+      children: hasChildren 
+        ? category.children.map((child) => {
+            const hasSubChildren = child.children && child.children.length > 0;
+            
+            return {
+              key: child.id,
+              label: hasSubChildren ? (
+                <span className="text-xs font-semibold text-gray-800">{child.name}</span>
+              ) : (
+                <Link 
+                  to={`/products?category=${child.id}`}
+                  className="text-xs text-gray-600 hover:text-blue-600 block w-full py-0.5"
+                >
+                  {child.name}
+                </Link>
+              ),
+              children: hasSubChildren 
+                ? child.children.map((subChild) => ({
+                    key: subChild.id,
+                    label: (
+                      <Link 
+                        to={`/products?category=${subChild.id}`}
+                        className="text-xs text-gray-500 hover:text-blue-600 block w-full py-0.5"
+                      >
+                        {subChild.name}
+                      </Link>
+                    )
+                  }))
+                : undefined
+            };
+          })
+        : undefined
     };
   });
 

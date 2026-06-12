@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { createOrder } from '../store/slices/orderSlice';
 import { resetCart } from '../store/slices/cartSlice';
@@ -11,9 +11,20 @@ import { PlusIcon, MapPinIcon, CheckIcon } from '@heroicons/react/24/outline';
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
   const { items, totalAmount } = useSelector((state) => state.cart);
   const { loading } = useSelector((state) => state.order);
+
+  const selectedItemIds = location.state?.selectedItemIds;
+
+  const checkoutItems = selectedItemIds
+    ? items.filter(item => selectedItemIds.includes(item.id))
+    : items;
+
+  const checkoutTotalAmount = selectedItemIds
+    ? checkoutItems.reduce((sum, item) => sum + item.subtotal, 0)
+    : totalAmount;
 
   const [addresses, setAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState(null);
@@ -38,10 +49,10 @@ const CheckoutPage = () => {
   }, []);
 
   useEffect(() => {
-    if (!items || items.length === 0) {
+    if (!checkoutItems || checkoutItems.length === 0) {
       navigate('/cart');
     }
-  }, [items, navigate]);
+  }, [checkoutItems, navigate]);
 
   const loadAddresses = async () => {
     try {
@@ -104,7 +115,12 @@ const CheckoutPage = () => {
       return;
     }
 
-    dispatch(createOrder(formData))
+    const orderPayload = {
+      ...formData,
+      selected_item_ids: selectedItemIds
+    };
+
+    dispatch(createOrder(orderPayload))
       .unwrap()
       .then((order) => {
         dispatch(resetCart());
@@ -115,7 +131,7 @@ const CheckoutPage = () => {
   };
 
   const shippingFee = 30000;
-  const total = totalAmount + shippingFee;
+  const total = checkoutTotalAmount + shippingFee;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -271,7 +287,7 @@ const CheckoutPage = () => {
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Đơn hàng của bạn</h2>
 
               <div className="space-y-3 border-b border-gray-200 pb-4 mb-4 max-h-64 overflow-y-auto">
-                {items.map((item) => (
+                {checkoutItems.map((item) => (
                   <div key={item.id} className="flex items-center space-x-3">
                     <div className="w-16 h-16 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
                       <img src={item.product_image || '/placeholder.png'} alt="" className="w-full h-full object-cover" />
@@ -288,7 +304,7 @@ const CheckoutPage = () => {
               <div className="space-y-2 border-b border-gray-200 pb-4 mb-4">
                 <div className="flex justify-between text-gray-600">
                   <span>Tạm tính</span>
-                  <span>{formatPrice(totalAmount)}</span>
+                  <span>{formatPrice(checkoutTotalAmount)}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Phí vận chuyển</span>

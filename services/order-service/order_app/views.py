@@ -112,7 +112,21 @@ class OrderListCreateView(APIView):
             return Response({'error': 'Giỏ hàng trống'}, status=status.HTTP_400_BAD_REQUEST)
 
         data = serializer.validated_data
-        subtotal = float(cart_data.get('total_amount', 0) or 0)
+        selected_item_ids = data.get('selected_item_ids')
+        
+        cart_items = cart_data.get('items', [])
+        if selected_item_ids:
+            # Convert list of UUIDs/strings to strings for direct comparison
+            selected_ids_str = [str(sid) for sid in selected_item_ids]
+            cart_items = [item for item in cart_items if str(item.get('id')) in selected_ids_str]
+            
+            if not cart_items:
+                return Response({'error': 'Không có sản phẩm hợp lệ được chọn'}, status=status.HTTP_400_BAD_REQUEST)
+                
+            subtotal = sum(float(item.get('subtotal', 0) or 0) for item in cart_items)
+        else:
+            subtotal = float(cart_data.get('total_amount', 0) or 0)
+            
         shipping_fee = 30000
 
         order = Order.objects.create(
@@ -130,7 +144,7 @@ class OrderListCreateView(APIView):
             note=data.get('note', ''),
         )
 
-        for item in cart_data.get('items', []):
+        for item in cart_items:
             OrderItem.objects.create(
                 order=order,
                 product_id=item['product_id'],
@@ -148,13 +162,17 @@ class OrderListCreateView(APIView):
         # Track purchase behavior for all items
         track_purchase_bulk(
             user_id=request.user.id,
-            items=cart_data.get('items', []),
+            items=cart_items,
             order_id=order.id
         )
 
         try:
             # headers already contains X-Trace-Id (set above via make_traced_headers)
-            httpx.delete(f"{settings.CART_SERVICE_URL}/clear/", headers=headers, timeout=5.0)
+            if selected_item_ids:
+                for item in cart_items:
+                    httpx.delete(f"{settings.CART_SERVICE_URL}/items/{item['id']}/", headers=headers, timeout=5.0)
+            else:
+                httpx.delete(f"{settings.CART_SERVICE_URL}/clear/", headers=headers, timeout=5.0)
         except Exception:
             pass
 

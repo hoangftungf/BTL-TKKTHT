@@ -76,6 +76,7 @@ class CategoryListView(APIView):
         serializer = CategorySerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
+            cache.delete("category_list")
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -97,6 +98,7 @@ class CategoryDetailView(APIView):
             serializer = CategorySerializer(category, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
+                cache.delete("category_list")
                 return Response(serializer.data)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Category.DoesNotExist:
@@ -106,6 +108,7 @@ class CategoryDetailView(APIView):
         try:
             category = Category.objects.get(pk=pk)
             category.delete()
+            cache.delete("category_list")
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Category.DoesNotExist:
             return Response({'error': 'Danh mục không tồn tại'}, status=status.HTTP_404_NOT_FOUND)

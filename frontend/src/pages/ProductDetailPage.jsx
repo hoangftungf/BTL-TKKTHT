@@ -19,6 +19,8 @@ const ProductDetailPage = () => {
   const dispatch = useDispatch();
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
+  const [mainImgFailed, setMainImgFailed] = useState(false);
+  const [failedThumbnails, setFailedThumbnails] = useState({});
 
   const { currentProduct: product, detailLoading: loading } = useSelector((state) => state.product);
   const { isAuthenticated } = useSelector((state) => state.auth);
@@ -108,10 +110,10 @@ const ProductDetailPage = () => {
               {/* Main image */}
               <div className="relative aspect-square rounded-xl overflow-hidden bg-gray-50 mb-3 group border border-gray-100">
                 <img
-                  src={images[selectedImage]?.image}
+                  src={mainImgFailed ? '/placeholder.png' : (images[selectedImage]?.image || '/placeholder.png')}
                   alt={product.name}
                   className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
-                  onError={(e) => { e.target.src = '/placeholder.png'; }}
+                  onError={() => setMainImgFailed(true)}
                 />
                 {hasDiscount && (
                   <div className="absolute top-3 left-3 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
@@ -136,14 +138,14 @@ const ProductDetailPage = () => {
                   {images.map((img, idx) => (
                     <button
                       key={idx}
-                      onClick={() => setSelectedImage(idx)}
+                      onClick={() => { setSelectedImage(idx); setMainImgFailed(false); }}
                       className={`w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all ${
                         selectedImage === idx
                           ? 'border-blue-500 shadow-md scale-105'
                           : 'border-gray-200 hover:border-blue-300'
                       }`}
                     >
-                      <img src={img.image} alt="" className="w-full h-full object-cover" onError={(e) => { e.target.src = '/placeholder.png'; }} />
+                      <img src={failedThumbnails[idx] ? '/placeholder.png' : (img.image || '/placeholder.png')} alt="" className="w-full h-full object-cover" onError={() => setFailedThumbnails(prev => ({ ...prev, [idx]: true }))} />
                     </button>
                   ))}
                 </div>
