@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     HealthCheckView,
+    MetricsView,
     ChatView,
     ChatStreamView,
     RateMessageView,
@@ -14,6 +15,7 @@ from .views import (
 
 urlpatterns = [
     path('health/', HealthCheckView.as_view(), name='health'),
+    path('metrics/', MetricsView.as_view(), name='metrics'),
     path('chat/', ChatView.as_view(), name='chat'),
     path('chat/stream/', ChatStreamView.as_view(), name='chat-stream'),
     path('messages/<uuid:message_id>/rate/', RateMessageView.as_view(), name='rate-message'),

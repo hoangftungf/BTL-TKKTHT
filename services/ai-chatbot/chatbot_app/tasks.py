@@ -87,10 +87,11 @@ def update_product_knowledge_base_async(product_data):
 
             session.run("""
                 MERGE (p:Product {id: $id})
-                SET p.name = $name, 
-                    p.price = $price, 
-                    p.brand = $brand, 
-                    p.status = $status, 
+                SET p.name = $name,
+                    p.name_lower = toLower($name),
+                    p.price = $price,
+                    p.brand = $brand,
+                    p.status = $status,
                     p.stock_quantity = $stock_quantity,
                     p.specifications = $specifications,
                     p.image_url = $image_url
@@ -100,6 +101,7 @@ def update_product_knowledge_base_async(product_data):
             if category:
                 session.run("""
                     MERGE (c:Category {name: $category})
+                    SET c.name_lower = toLower($category)
                     WITH c
                     MATCH (p:Product {id: $product_id})
                     MERGE (p)-[:BELONGS_TO]->(c)
@@ -109,6 +111,7 @@ def update_product_knowledge_base_async(product_data):
             if brand:
                 session.run("""
                     MERGE (b:Brand {name: $brand})
+                    SET b.name_lower = toLower($brand)
                     WITH b
                     MATCH (p:Product {id: $product_id})
                     MERGE (p)-[:MADE_BY]->(b)
@@ -185,89 +188,64 @@ def update_product_knowledge_base_async(product_data):
     except Exception as exc:
         logger.error(f"[Celery] Error updating product {pid} in Neo4j: {exc}")
 
-    # 2. Update FAISS Vector Store
+    # 2. Update FAISS Vector Store (Phase 2.1 — using unified components)
     try:
-        from chatbot_app.engine import ProductVectorStore, TextEmbedder, RAGPipeline
-        
-        # Initialize Vector Store and load existing index
-        store = ProductVectorStore()
-        store.load_local(AI_INDEX_DIR)
-        
-        # Build text representation & generate embedding
-        text_rep = RAGPipeline._build_product_text({
+        from lib.ai_core.vector_store import vector_store
+        from lib.ai_core.embedder import embedder
+        from lib.ai_core.acl import ProductACL
+
+        # Load existing index if present
+        vector_store.load(AI_INDEX_DIR)
+
+        # Build product dict in normalized format
+        product_normalized = {
+            'id': str(pid),
             'name': name,
-            'brand': brand,
+            'brand': brand or "",
             'category': category,
             'description': description,
-            'color': color,
-            'material': material,
+            'price': float(price),
+            'image_url': image_url,
+            'status': status,
+            'stock_quantity': int(stock_quantity),
+            'variants': product_data.get('variants', []),
             'specifications': product_data.get('specifications', {}),
-            'variants': product_data.get('variants', [])
-        })
-        
-        ollama_host = getattr(settings, 'OLLAMA_HOST', 'http://ollama:11434')
-        embedder = TextEmbedder(ollama_host)
-        embeddings = embedder.embed([text_rep])
-        
+        }
+
+        # Build text representation for embedding
+        text = ProductACL.to_embedding_text(product_normalized)
+        embeddings = embedder.embed_sync([text])
+
         if len(embeddings) > 0:
-            # Check if product already exists in vector store
             pid_str = str(pid)
-            if pid_str in store.product_ids:
-                idx = store.product_ids.index(pid_str)
-                # Remove from FAISS index and lists
-                # Note: FAISS doesn't easily support single item deletion without rebuilding,
-                # but we can update self.product_data and rebuild the index in memory.
-                # Since the store is small (500 products), we can rebuild it easily.
-                store.product_data[pid_str] = {
-                    'name': name,
-                    'price': float(price),
-                    'category': category,
-                    'brand': brand or "",
-                    'description': description[:300],
-                    'image_url': image_url,
-                    'status': status,
-                    'stock_quantity': int(stock_quantity),
-                    'color': color,
-                    'material': material
-                }
-                
-                # Rebuild embeddings list and index
-                all_pids = list(store.product_data.keys())
-                all_texts = []
-                for p_id in all_pids:
-                    p_data = store.product_data[p_id]
-                    all_texts.append(RAGPipeline._build_product_text(p_data))
-                
-                all_embs = embedder.embed(all_texts)
-                
-                # Clear and re-populate store
-                store.product_ids = []
-                store.index = None
-                store._embeddings = []
+            if pid_str in vector_store.product_ids:
+                # Update existing product
+                vector_store.product_data[pid_str] = product_normalized
+
+                # Rebuild the entire index in memory
+                all_pids = list(vector_store.product_data.keys())
+                all_texts = [
+                    ProductACL.to_embedding_text(vector_store.product_data[p_id])
+                    for p_id in all_pids
+                ]
+                all_embs = embedder.embed_sync(all_texts)
+
+                vector_store.product_ids = []
+                import faiss
+                vector_store.index = faiss.IndexFlatIP(vector_store.embedding_dim)
+                vector_store._embeddings_fallback = []
                 for p_id, emb in zip(all_pids, all_embs):
-                    p_data = store.product_data[p_id]
-                    store.add(p_id, emb, p_data)
+                    vector_store.add(product_id=p_id, embedding=emb, data=vector_store.product_data[p_id])
             else:
                 # Add new product
-                store.add(
+                vector_store.add(
                     product_id=pid_str,
                     embedding=embeddings[0],
-                    product_data={
-                        'name': name,
-                        'price': float(price),
-                        'category': category,
-                        'brand': brand or "",
-                        'description': description[:300],
-                        'image_url': image_url,
-                        'status': status,
-                        'stock_quantity': int(stock_quantity),
-                        'color': color,
-                        'material': material
-                    }
+                    data=product_normalized,
                 )
-            
-            # Save local
-            store.save_local(AI_INDEX_DIR)
-            logger.info(f"[Celery] Successfully updated product {pid} in FAISS store.")
+
+            # Persist to disk
+            vector_store.save(AI_INDEX_DIR)
+            logger.info(f"[Celery] Successfully updated product {pid} in FAISS store (unified).")
     except Exception as exc:
         logger.error(f"[Celery] Error updating product {pid} in FAISS: {exc}")

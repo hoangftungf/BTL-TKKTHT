@@ -5,7 +5,9 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from .engine import search_engine
+from django.http import HttpResponse
+from .engine import search_engine, smart_search
+from .metrics import metrics
 import httpx
 from django.conf import settings
 
@@ -48,11 +50,25 @@ class HealthCheckView(APIView):
         })
 
 
+class MetricsView(APIView):
+    """Expose Prometheus metrics for scraping."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from prometheus_client import generate_latest, REGISTRY
+        return HttpResponse(
+            generate_latest(REGISTRY),
+            content_type='text/plain; charset=utf-8',
+        )
+
+
 class SmartSearchView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
         """Tìm kiếm thông minh"""
+        import time
+        t0 = time.perf_counter()
         query = request.data.get('query', request.data.get('q', ''))
         page = int(request.data.get('page', 1))
         page_size = int(request.data.get('page_size', 20))
@@ -88,6 +104,10 @@ class SmartSearchView(APIView):
 
             for r in result['results']:
                 r['product'] = products.get(str(r['product_id']))
+
+        metrics.requests_total.labels(mode='keyword', status='success').inc()
+        metrics.latency_seconds.labels(mode='keyword').observe(time.perf_counter() - t0)
+        metrics.results_count.labels(mode='keyword').observe(result.get('count', 0))
 
         return Response(result)
 
@@ -152,6 +172,8 @@ class HybridSearchView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        import time
+        t0 = time.perf_counter()
         query = request.data.get('query', '')
         mode = request.data.get('mode', 'hybrid')
         page = int(request.data.get('page', 1))
@@ -190,6 +212,10 @@ class HybridSearchView(APIView):
             for r in result['results']:
                 r['product'] = products.get(str(r['product_id']))
 
+        metrics.requests_total.labels(mode=mode, status='success').inc()
+        metrics.latency_seconds.labels(mode=mode).observe(time.perf_counter() - t0)
+        metrics.results_count.labels(mode=mode).observe(result.get('total', 0))
+
         return Response(result)
 
     def _fetch_products(self, product_ids):
@@ -222,3 +248,94 @@ class IndexProductsView(APIView):
             # Reindex all
             result = search_engine.reindex_all()
             return Response(result)
+
+
+class SmartSearchV2View(APIView):
+    """SmartSearch V2 — hybrid search with async parallel + reranker."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        import time
+        t0 = time.perf_counter()
+        query = request.data.get('query', '')
+        mode = request.data.get('mode', 'hybrid')
+        page = int(request.data.get('page', 1))
+        page_size = int(request.data.get('page_size', 20))
+        rerank = request.data.get('rerank', True)
+        if isinstance(rerank, str):
+            rerank = rerank.lower() in ('true', '1', 'yes')
+
+        filters = {
+            'category': request.data.get('category'),
+            'brand': request.data.get('brand'),
+            'min_price': request.data.get('min_price'),
+            'max_price': request.data.get('max_price'),
+        }
+        filters = {k: v for k, v in filters.items() if v is not None}
+
+        if mode not in ('keyword', 'vector', 'hybrid'):
+            mode = 'hybrid'
+
+        try:
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(
+                    smart_search.search(
+                        query=query,
+                        filters=filters if filters else None,
+                        page=page,
+                        page_size=page_size,
+                        mode=mode,
+                        rerank=rerank,
+                    )
+                )
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.error(f"SmartSearchV2 failed, falling back to hybrid: {e}")
+            result = search_engine.hybrid_search(
+                query=query,
+                filters=filters if filters else None,
+                page=page,
+                page_size=page_size,
+                mode=mode,
+            )
+
+        # Track search behavior
+        if request.user and request.user.is_authenticated and query:
+            track_search(
+                user_id=request.user.id,
+                query=query,
+                results_count=result.get('total', 0),
+                metadata={'filters': filters, 'page': page, 'mode': mode, 'rerank': rerank},
+            )
+
+        # Fetch full product details
+        if result.get('results'):
+            product_ids = [r['product_id'] for r in result['results']]
+            products = self._fetch_products(product_ids)
+            for r in result['results']:
+                r['product'] = products.get(str(r['product_id']))
+
+        metrics.requests_total.labels(mode=mode, status='success').inc()
+        metrics.latency_seconds.labels(mode=mode).observe(time.perf_counter() - t0)
+        metrics.results_count.labels(mode=mode).observe(result.get('total', 0))
+
+        return Response(result)
+
+    def _fetch_products(self, product_ids):
+        products = {}
+        for pid in product_ids:
+            try:
+                response = httpx.get(
+                    f"{settings.PRODUCT_SERVICE_URL}/{pid}/",
+                    timeout=5.0,
+                )
+                if response.status_code == 200:
+                    products[str(pid)] = response.json()
+            except Exception:
+                pass
+        return products

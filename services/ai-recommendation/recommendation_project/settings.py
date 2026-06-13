@@ -28,7 +28,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': ['recommendation_app.authentication.JWTAuthentication'],
+    'DEFAULT_AUTHENTICATION_CLASSES': ['lib.shared.auth.JWTAuthentication'],
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.AllowAny'],
 }
 
@@ -38,6 +38,9 @@ ORDER_SERVICE_URL = os.environ.get('ORDER_SERVICE_URL', 'http://localhost:8005')
 
 # Model paths
 MODEL_DIR = BASE_DIR / 'models'
+
+# AI Index directory (shared volume for FAISS)
+AI_INDEX_DIR = os.getenv('AI_INDEX_DIR', '/app/ai_index')
 
 # Neo4j Knowledge Graph
 NEO4J_URI = os.environ.get('NEO4J_URI', 'bolt://neo4j:7687')

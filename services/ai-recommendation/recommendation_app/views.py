@@ -2,8 +2,10 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.http import HttpResponse
 from .engine import recommendation_engine
 from .models import UserInteraction
+from .metrics import metrics
 import httpx
 from django.conf import settings
 import logging
@@ -22,11 +24,25 @@ class HealthCheckView(APIView):
         })
 
 
+class MetricsView(APIView):
+    """Expose Prometheus metrics for scraping."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from prometheus_client import generate_latest, REGISTRY
+        return HttpResponse(
+            generate_latest(REGISTRY),
+            content_type='text/plain; charset=utf-8',
+        )
+
+
 class SimilarProductsView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, product_id):
         """Lấy sản phẩm tương tự"""
+        import time
+        t0 = time.perf_counter()
         n = int(request.query_params.get('limit', 10))
 
         similar = recommendation_engine.get_similar_products(product_id, n=n)
@@ -41,6 +57,9 @@ class SimilarProductsView(APIView):
 
         # Fetch product details
         products = self._fetch_product_details([s['product_id'] for s in similar])
+
+        metrics.requests_total.labels(source='similar', status='success').inc()
+        metrics.latency_seconds.labels(source='similar').observe(time.perf_counter() - t0)
 
         return Response({
             'product_id': str(product_id),
@@ -71,6 +90,8 @@ class PersonalizedRecommendationsView(APIView):
 
     def get(self, request):
         """Lấy gợi ý cá nhân hóa cho user"""
+        import time
+        t0 = time.perf_counter()
         n = int(request.query_params.get('limit', 10))
 
         recommendations = recommendation_engine.get_user_recommendations(
@@ -91,6 +112,9 @@ class PersonalizedRecommendationsView(APIView):
             except Exception:
                 pass
 
+        metrics.requests_total.labels(source='user_recs', status='success').inc()
+        metrics.latency_seconds.labels(source='user_recs').observe(time.perf_counter() - t0)
+
         return Response({
             'user_id': str(request.user.id),
             'recommendations': [
@@ -105,6 +129,8 @@ class TrendingProductsView(APIView):
 
     def get(self, request):
         """Lấy sản phẩm trending"""
+        import time
+        t0 = time.perf_counter()
         n = int(request.query_params.get('limit', 10))
         days = int(request.query_params.get('days', 7))
 
@@ -122,6 +148,9 @@ class TrendingProductsView(APIView):
                     products[item['product_id']] = response.json()
             except Exception:
                 pass
+
+        metrics.requests_total.labels(source='trending', status='success').inc()
+        metrics.latency_seconds.labels(source='trending').observe(time.perf_counter() - t0)
 
         return Response({
             'period_days': days,
@@ -277,6 +306,147 @@ class HybridChatbotView(APIView):
 
         result = hybrid_engine.get_chatbot_response(query=query, user_id=user_id)
         return Response(result)
+
+
+# ===================== HYBRID ENGINE V2 VIEWS (Phase 3) =====================
+
+class HybridV2RecommendationsView(APIView):
+    """
+    Hybrid Engine V2 — Adaptive weights + Multi-Armed Bandit.
+
+    Replaces LSTM with online Collaborative Filtering + KG + Content-Based.
+    No pre-training needed.
+
+    GET /hybrid/v2/?user_id=xxx&query=laptop&product_id=xxx&limit=10
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from .hybrid_engine_v2 import hybrid_engine_v2
+
+        user_id = request.query_params.get('user_id')
+        if request.user and request.user.is_authenticated:
+            user_id = str(request.user.id)
+
+        query = request.query_params.get('query')
+        product_id = request.query_params.get('product_id')
+        n = int(request.query_params.get('limit', 10))
+
+        result = hybrid_engine_v2.recommend(
+            user_id=user_id,
+            query=query,
+            product_id=product_id,
+            n=n,
+        )
+
+        # Fetch product details
+        product_ids = [r['product_id'] for r in result.get('recommendations', [])]
+        products = self._fetch_products(product_ids)
+        for rec in result.get('recommendations', []):
+            rec['product'] = products.get(rec['product_id'])
+
+        return Response(result)
+
+    def post(self, request):
+        """Same as GET but with POST body support."""
+        from .hybrid_engine_v2 import hybrid_engine_v2
+
+        user_id = request.data.get('user_id')
+        if not user_id and request.user and request.user.is_authenticated:
+            user_id = str(request.user.id)
+
+        query = request.data.get('query')
+        product_id = request.data.get('product_id')
+        n = int(request.data.get('limit', 10))
+
+        result = hybrid_engine_v2.recommend(
+            user_id=user_id,
+            query=query,
+            product_id=product_id,
+            n=n,
+        )
+
+        product_ids = [r['product_id'] for r in result.get('recommendations', [])]
+        products = self._fetch_products(product_ids)
+        for rec in result.get('recommendations', []):
+            rec['product'] = products.get(rec['product_id'])
+
+        return Response(result)
+
+    def _fetch_products(self, product_ids):
+        products = {}
+        for pid in product_ids:
+            try:
+                response = httpx.get(f"{settings.PRODUCT_SERVICE_URL}/{pid}/", timeout=5.0)
+                if response.status_code == 200:
+                    products[pid] = response.json()
+            except Exception:
+                pass
+        return products
+
+
+class FeedbackStatsView(APIView):
+    """View feedback/engagement statistics for all recommendation sources."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from .feedback import feedback_collector
+        return Response({
+            'summary': feedback_collector.get_engagement_summary(),
+            'source_scores': feedback_collector.get_source_scores(),
+        })
+
+
+class RecordFeedbackClickView(APIView):
+    """
+    Record user feedback on recommendations.
+
+    POST /hybrid/v2/feedback/
+    {
+        "user_id": "uuid",
+        "product_id": "uuid",
+        "source": "collab|kg|content|popular|bandit",
+        "action": "click|add_to_cart|purchase"
+    }
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from .feedback import feedback_collector
+        from .bandit import bandit
+
+        user_id = request.data.get('user_id')
+        if not user_id and request.user and request.user.is_authenticated:
+            user_id = str(request.user.id)
+
+        product_id = request.data.get('product_id')
+        source = request.data.get('source', 'popular')
+        action = request.data.get('action', 'click')
+
+        if not user_id or not product_id:
+            return Response(
+                {'error': 'user_id and product_id are required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Record feedback
+        if action == 'click':
+            feedback_collector.record_click(user_id, product_id, source)
+            bandit.record_feedback(user_id, source, clicked=True)
+        elif action == 'add_to_cart':
+            feedback_collector.record_add_to_cart(user_id, product_id, source)
+        elif action == 'purchase':
+            feedback_collector.record_purchase(user_id, product_id, source)
+        elif action == 'impression':
+            position = int(request.data.get('position', 0))
+            feedback_collector.record_impression(user_id, product_id, source, position)
+        else:
+            return Response(
+                {'error': f'Invalid action: {action}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response({'status': 'ok', 'action': action, 'source': source})
 
 
 # ===================== LSTM ENGINE VIEWS =====================

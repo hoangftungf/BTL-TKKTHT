@@ -2,14 +2,31 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
-from django.http import StreamingHttpResponse
+from django.http import StreamingHttpResponse, HttpResponse
 import json
 import logging
 import threading
 from .engine import chatbot_engine
 from .models import Conversation, Message, FAQ, Intent
+from .metrics import metrics
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Prometheus Metrics Endpoint
+# ---------------------------------------------------------------------------
+
+class MetricsView(APIView):
+    """Expose Prometheus metrics for scraping."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from prometheus_client import generate_latest, REGISTRY
+        return HttpResponse(
+            generate_latest(REGISTRY),
+            content_type='text/plain; charset=utf-8',
+        )
 
 
 class HealthCheckView(APIView):
@@ -27,6 +44,9 @@ class ChatView(APIView):
 
     def post(self, request):
         """Xử lý tin nhắn chat"""
+        import time
+        t0 = time.perf_counter()
+
         message = request.data.get('message', '')
         conversation_id = request.data.get('conversation_id')
         session_id = request.data.get('session_id', request.session.session_key)
@@ -38,19 +58,26 @@ class ChatView(APIView):
             user_id = auth_header
 
         if not message:
+            metrics.requests_total.labels(intent='chat', status='error').inc()
             return Response(
                 {'error': 'Message is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        result = chatbot_engine.chat_sync(
-            message=message,
-            conversation_id=conversation_id,
-            session_id=session_id,
-            user_id=user_id
-        )
-
-        return Response(result)
+        try:
+            result = chatbot_engine.chat_sync(
+                message=message,
+                conversation_id=conversation_id,
+                session_id=session_id,
+                user_id=user_id
+            )
+            metrics.requests_total.labels(intent='chat', status='success').inc()
+            metrics.latency_seconds.labels(intent='chat').observe(time.perf_counter() - t0)
+            return Response(result)
+        except Exception as e:
+            metrics.requests_total.labels(intent='chat', status='error').inc()
+            metrics.errors_total.labels(error_type=type(e).__name__).inc()
+            raise
 
 
 class ChatStreamView(APIView):

@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.urls import path
 from recommendation_app.views import (
     HealthCheckView,
+    MetricsView,
     SimilarProductsView,
     PersonalizedRecommendationsView,
     TrendingProductsView,
@@ -14,6 +15,10 @@ from recommendation_app.views import (
     # Hybrid Engine
     HybridRecommendationsView,
     HybridChatbotView,
+    # Hybrid Engine V2 (Phase 3)
+    HybridV2RecommendationsView,
+    FeedbackStatsView,
+    RecordFeedbackClickView,
     # LSTM
     LSTMPredictionsView,
     LSTMTrainView,
@@ -34,6 +39,7 @@ from recommendation_app.views import (
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('health/', HealthCheckView.as_view()),
+    path('metrics/', MetricsView.as_view()),
 
     # Legacy endpoints (Collaborative Filtering)
     path('product/<uuid:product_id>/', SimilarProductsView.as_view()),
@@ -70,4 +76,9 @@ urlpatterns = [
     # Behavior Tracking API
     path('track/', TrackBehaviorView.as_view()),
     path('behaviors/stats/', BehaviorStatsView.as_view()),
+
+    # Hybrid Engine V2 (Phase 3)
+    path('hybrid/v2/', HybridV2RecommendationsView.as_view()),
+    path('hybrid/v2/feedback/', RecordFeedbackClickView.as_view()),
+    path('hybrid/v2/feedback/stats/', FeedbackStatsView.as_view()),
 ]

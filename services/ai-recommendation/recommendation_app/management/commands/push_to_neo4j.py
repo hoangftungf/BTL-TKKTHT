@@ -276,7 +276,10 @@ class Command(BaseCommand):
                 """
                 UNWIND $products AS p
                 MERGE (prod:Product {id: p.id})
-                SET prod.name = p.name, prod.brand = p.brand, prod.price = p.price
+                SET prod.name = p.name,
+                    prod.name_lower = toLower(p.name),
+                    prod.brand = p.brand,
+                    prod.price = p.price
                 """,
                 products=product_list
             )
@@ -288,6 +291,7 @@ class Command(BaseCommand):
                     """
                     UNWIND $categories AS cat
                     MERGE (c:Category {name: cat})
+                    SET c.name_lower = toLower(cat)
                     """,
                     categories=list(categories)
                 )

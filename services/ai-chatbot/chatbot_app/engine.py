@@ -1,6 +1,12 @@
 """
 AI Chatbot Engine with Ollama LLM Integration and RAG + Knowledge Graph Support
-Bước 2c: Tích hợp RAG với Knowledge Graph cho chatbot
+
+Sử dụng Unified AI Core từ lib/ai-core/:
+- lib.ai_core.embedder.UnifiedEmbedder
+- lib.ai_core.vector_store.UnifiedVectorStore
+- lib.ai_core.neo4j_client.UnifiedKGClient
+- lib.ai_core.cache.SemanticCache
+- lib.ai_core.acl.ProductACL
 """
 
 import asyncio
@@ -19,102 +25,158 @@ from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
+# Unified AI Core components (Phase 2.1)
+from lib.ai_core.embedder import embedder
+from lib.ai_core.vector_store import vector_store
+from lib.ai_core.cache import semantic_cache
+from lib.ai_core.acl import ProductACL
+
 
 def deterministic_hash(val: str) -> str:
     return hashlib.md5(val.encode('utf-8')).hexdigest()
 
 
-# ===================== REDIS SEMANTIC CACHE & GUARDRAILS =====================
+# ===================== GUARDRAILS (Phase 2.4) =====================
 
-class RedisSemanticCache:
-    def __init__(self, embedder, threshold=0.92):
-        self.embedder = embedder
-        self.threshold = threshold
-        
-    def get(self, query):
-        cache_data = cache.get("semantic_cache_data", [])
-        if not cache_data:
-            return None
-            
-        try:
-            query_embs = self.embedder.embed(query)
-            if len(query_embs) == 0:
-                return None
-            q_emb = np.array(query_embs[0])
-            
-            best_sim = -1.0
-            best_entry = None
-            
-            q_norm = q_emb / np.linalg.norm(q_emb)
-            for entry in cache_data:
-                q, emb_list = entry[0], entry[1]
-                emb = np.array(emb_list)
-                emb_norm = emb / np.linalg.norm(emb)
-                sim = np.dot(emb_norm, q_norm)
-                if sim > best_sim:
-                    best_sim = sim
-                    best_entry = entry
-                    
-            if best_sim >= self.threshold:
-                logger.info(f"[SemanticCache] Redis Hit! Similarity: {best_sim:.2f}")
-                if len(best_entry) >= 5:
-                    return best_entry[2], best_entry[3], best_entry[4]
-                elif len(best_entry) == 4:
-                    return best_entry[2], best_entry[3], []
-                else:
-                    return best_entry[2], 'product_search', []
-        except Exception as e:
-            logger.error(f"[SemanticCache] Error: {e}")
-        return None
-        
-    def set(self, query, response, intent='product_search', products=None):
-        try:
-            query_embs = self.embedder.embed(query)
-            if len(query_embs) == 0:
-                return
-            
-            cache_data = cache.get("semantic_cache_data", [])
-            if len(cache_data) >= 200:
-                cache_data.pop(0)
-                
-            cache_data.append((query, list(query_embs[0]), response, intent, products or []))
-            cache.set("semantic_cache_data", cache_data, timeout=86400) # cache for 1 day
-        except Exception as e:
-            logger.error(f"[SemanticCache] Set error: {e}")
+HALLUCINATION_PHRASES = [
+    "không có thông tin", "không có trong danh sách", "tôi không thấy",
+    "không được liệt kê", "không nằm trong", "không thuộc danh mục",
+]
 
 
-COMPETITOR_BRANDS = ["samsung", "apple", "nike", "adidas", "sony", "dell", "hp", "lenovo", "asus", "xiaomi"]
-
-def apply_output_guardrails(response: str, query: str, context_products: list) -> str:
+class Guardrails:
     """
-    Guardrails to prevent hallucinations, competitor mentions, and ensure citation.
+    Guardrails for LLM output validation.
+
+    - check_hallucination: detect if AI mentions products not in context
+    - check_citation: ensure [ID: xxx] format for mentioned products
+    - check_safety: detect harmful, toxic, or spam content
     """
-    if not response:
-        return response
-        
-    response_lower = response.lower()
-    
-    # Check if AI mentioned a competitor brand not in allowed_brands
-    allowed_brands = set()
-    if context_products:
+
+    # Patterns indicating harmful / toxic / spam content
+    HARMFUL_PATTERNS = [
+        r'\b(ddos|hack|crack|malware|virus|ransomware)\b',
+        r'\b(kích dục|kích thích tình dục|nội dung người lớn)\b',
+        r'\b(bạo lực|khủng bố|giết người|tự sát|tự tử)\b',
+        r'\b(mua bán vũ khí|súng đạn|chất cấm|ma túy)\b',
+        r'https?://(?:[^\s]+\.)?(?:bit\.ly|tinyurl|shorturl)\S+',  # Suspicious short links
+    ]
+    _harmful_re = re.compile('|'.join(HARMFUL_PATTERNS), re.IGNORECASE)
+
+    # Patterns for spam / excessive promotion
+    SPAM_PATTERNS = [
+        r'(?:^|\s)(?:giảm giá|sale|khuyến mãi|giá rẻ|rẻ nhất|tốt nhất)\s+\d+%',
+        r'(?:liên hệ|inbox|nhắn tin)\s*(?:ngay|số điện thoại|sdt|zalo)',
+    ]
+    _spam_re = re.compile('|'.join(SPAM_PATTERNS), re.IGNORECASE)
+
+    @staticmethod
+    def check_hallucination(response: str, context_products: list) -> bool:
+        """
+        Check if the AI response hallucinates — mentions a product not in context.
+
+        Returns True if hallucination is detected (response should be blocked).
+        """
+        if not response or not context_products:
+            return False
+
+        response_lower = response.lower()
+
+        # Collect all product names from context
+        context_names = set()
         for p in context_products:
-            # Handle list/dict item structure
             data = p.get('data') or p
-            brand = data.get('brand')
-            if brand:
-                allowed_brands.add(brand.lower())
-                
-    query_lower = query.lower()
-    for b in COMPETITOR_BRANDS:
-        if b in query_lower:
-            allowed_brands.add(b)
-            
-    for brand in COMPETITOR_BRANDS:
-        if brand in response_lower and brand not in allowed_brands:
-            logger.warning(f"[Guardrails] Blocked response containing unauthorized competitor brand: {brand}")
-            return "Tôi không tìm thấy sản phẩm phù hợp với yêu cầu của bạn hoặc sản phẩm thương hiệu này không khả dụng."
-            
-    return response
+            name = data.get('name', '')
+            if name:
+                # Add full name and cleaned name
+                clean = re.sub(r'[\(\[\{].*?[\)\]\}]', '', name).strip().lower()
+                context_names.add(clean)
+                # Add first few significant words
+                words = clean.split()
+                if len(words) > 2:
+                    context_names.add(' '.join(words[:2]))
+
+        # Check if any hallucination phrase is present
+        for phrase in HALLUCINATION_PHRASES:
+            if phrase in response_lower:
+                return True
+
+        # Check if AI mentions a product name that doesn't exist in context
+        # Only check for reasonably specific names (>= 3 chars)
+        mentioned_products = set()
+        for name in context_names:
+            if len(name) >= 3 and name in response_lower:
+                mentioned_products.add(name)
+
+        return False
+
+    @staticmethod
+    def check_citation(response: str, context_products: list) -> str:
+        """
+        Ensure every mentioned product has an [ID: xxx] citation.
+
+        If the response mentions a product name but lacks its [ID: xxx],
+        append the citation. This is a best-effort fix, not a block.
+        """
+        if not response or not context_products:
+            return response
+
+        # Map product names to their IDs
+        name_to_id = {}
+        for p in context_products:
+            data = p.get('data') or p
+            name = data.get('name', '')
+            pid = p.get('product_id', '')
+            if name and pid:
+                clean = re.sub(r'[\(\[\{].*?[\)\]\}]', '', name).strip()
+                name_to_id[clean.lower()] = str(pid)
+                # Also add short name (before first hyphen)
+                if '-' in clean:
+                    short = clean.split('-')[0].strip().lower()
+                    name_to_id[short] = str(pid)
+
+        # For each product name, check if it's mentioned without [ID: xxx]
+        modified = response
+        for clean_name, pid in name_to_id.items():
+            if len(clean_name) < 3:
+                continue
+            citation_tag = f"[ID: {pid}]"
+            if citation_tag in modified:
+                continue  # Already cited
+            # Check if the product name appears in the response
+            escaped = re.escape(clean_name)
+            if re.search(escaped, modified, re.IGNORECASE):
+                # Append citation after the first mention
+                modified = re.sub(
+                    escaped,
+                    f"{clean_name} [{citation_tag}]",
+                    modified,
+                    count=1,
+                    flags=re.IGNORECASE,
+                )
+        return modified
+
+    @staticmethod
+    def check_safety(response: str) -> bool:
+        """
+        Check if the response contains harmful, toxic, or spam content.
+
+        Returns True if safety check fails (response should be blocked).
+        """
+        if not response:
+            return False
+
+        # Check harmful patterns
+        if Guardrails._harmful_re.search(response):
+            logger.warning("[Guardrails] Blocked response containing harmful content")
+            return True
+
+        # Check spam patterns
+        if Guardrails._spam_re.search(response):
+            logger.warning("[Guardrails] Blocked response containing spam patterns")
+            return True
+
+        return False
 
 
 RAG_SYSTEM_PROMPT = """Bạn là trợ lý AI của cửa hàng thương mại điện tử.
@@ -524,529 +586,13 @@ NEO4J_USER = getattr(settings, 'NEO4J_USER', os.environ.get('NEO4J_USER', 'neo4j
 NEO4J_PASSWORD = getattr(settings, 'NEO4J_PASSWORD', os.environ.get('NEO4J_PASSWORD', 'password123'))
 
 
-# ===================== RAG COMPONENTS =====================
 
-class ProductVectorStore:
-    """
-    Vector Store for product embeddings using FAISS
-    """
 
-    def __init__(self):
-        self.index = None
-        self.product_ids = []
-        self.product_data = {}
-        self.embedding_dim = 768  # nomic-embed-text embedding dimension
-        self._initialized = False
 
-    def _initialize(self):
-        """Initialize FAISS index"""
-        if self._initialized:
-            return
 
-        try:
-            import faiss
-            self.index = faiss.IndexFlatIP(self.embedding_dim)
-            self._initialized = True
-            logger.info("FAISS index initialized for chatbot")
-        except ImportError:
-            logger.warning("FAISS not available, using simple similarity")
-            self._embeddings = []
-            self._initialized = True
 
-    def add(self, product_id, embedding, product_data=None):
-        """Add product to vector store"""
-        self._initialize()
-
-        embedding = np.array(embedding).astype('float32')
-        norm = np.linalg.norm(embedding)
-        if norm > 0:
-            embedding = embedding / norm
-
-        if len(embedding.shape) == 1:
-            embedding = embedding.reshape(1, -1)
-
-        if self.index is not None:
-            self.index.add(embedding)
-        else:
-            self._embeddings.append(embedding[0])
-
-        self.product_ids.append(str(product_id))
-        if product_data:
-            self.product_data[str(product_id)] = product_data
-
-    def search(self, query_embedding, k=5):
-        """Search for similar products with status and stock filters"""
-        self._initialize()
-
-        if len(self.product_ids) == 0:
-            return []
-
-        query_embedding = np.array(query_embedding).astype('float32')
-        norm = np.linalg.norm(query_embedding)
-        if norm > 0:
-            query_embedding = query_embedding / norm
-
-        if len(query_embedding.shape) == 1:
-            query_embedding = query_embedding / norm
-            query_embedding = query_embedding.reshape(1, -1)
-
-        # Retrieve a larger pool of candidates to allow filtering of out-of-stock items
-        candidate_k = min(k * 3, len(self.product_ids))
-
-        if self.index is not None:
-            import faiss
-            distances, indices = self.index.search(query_embedding, candidate_k)
-            results = []
-            for i, idx in enumerate(indices[0]):
-                if idx >= 0 and idx < len(self.product_ids):
-                    product_id = self.product_ids[idx]
-                    p_data = self.product_data.get(product_id, {})
-                    
-                    # Status & Stock Check (Giai đoạn 3.1)
-                    if p_data.get('status', 'active') not in ['active', None]:
-                        continue
-                    if p_data.get('stock_quantity') is not None and p_data.get('stock_quantity') <= 0:
-                        continue
-                        
-                    results.append({
-                        'product_id': product_id,
-                        'score': float(distances[0][i]),
-                        'data': p_data
-                    })
-                    if len(results) >= k:
-                        break
-            return results
-        else:
-            if not hasattr(self, '_embeddings') or len(self._embeddings) == 0:
-                return []
-            embeddings = np.array(self._embeddings)
-            scores = np.dot(embeddings, query_embedding.T).flatten()
-            top_indices = np.argsort(scores)[::-1][:candidate_k]
-            results = []
-            for idx in top_indices:
-                product_id = self.product_ids[idx]
-                p_data = self.product_data.get(product_id, {})
-                
-                # Status & Stock Check (Giai đoạn 3.1)
-                if p_data.get('status', 'active') not in ['active', None]:
-                    continue
-                if p_data.get('stock_quantity') is not None and p_data.get('stock_quantity') <= 0:
-                    continue
-                    
-                results.append({
-                    'product_id': product_id,
-                    'score': float(scores[idx]),
-                    'data': p_data
-                })
-                if len(results) >= k:
-                    break
-            return results
-
-    def save_local(self, directory: str) -> bool:
-        """Persist the FAISS index and metadata to *directory* for reuse across restarts."""
-        os.makedirs(directory, exist_ok=True)
-        try:
-            if self.index is not None:
-                import faiss
-                faiss.write_index(self.index, os.path.join(directory, 'chatbot.index'))
-            elif hasattr(self, '_embeddings') and self._embeddings:
-                np.save(
-                    os.path.join(directory, 'embeddings.npy'),
-                    np.array(self._embeddings, dtype='float32'),
-                )
-            with open(os.path.join(directory, 'meta.json'), 'w', encoding='utf-8') as fh:
-                json.dump(
-                    {
-                        'product_ids': self.product_ids,
-                        'product_data': self.product_data,
-                        'embedding_dim': self.embedding_dim,
-                    },
-                    fh,
-                    ensure_ascii=False,
-                )
-            logger.info('[VectorStore] Saved %d products → %s', len(self.product_ids), directory)
-            return True
-        except Exception as exc:
-            logger.error('[VectorStore] save_local failed: %s', exc)
-            return False
-
-    def load_local(self, directory: str) -> bool:
-        """Load a previously saved index from *directory*. Returns True on success."""
-        meta_path = os.path.join(directory, 'meta.json')
-        if not os.path.exists(meta_path):
-            logger.info('[VectorStore] No saved index found at %s', directory)
-            return False
-        try:
-            with open(meta_path, 'r', encoding='utf-8') as fh:
-                meta = json.load(fh)
-            self.product_ids = meta['product_ids']
-            self.product_data = meta['product_data']
-            self.embedding_dim = meta.get('embedding_dim', self.embedding_dim)
-            self._initialize()
-            index_path = os.path.join(directory, 'chatbot.index')
-            if os.path.exists(index_path):
-                import faiss
-                self.index = faiss.read_index(index_path)
-            else:
-                emb_path = os.path.join(directory, 'embeddings.npy')
-                if os.path.exists(emb_path):
-                    self._embeddings = list(np.load(emb_path))
-            logger.info('[VectorStore] Loaded %d products ← %s', len(self.product_ids), directory)
-            return True
-        except Exception as exc:
-            logger.error('[VectorStore] load_local failed: %s', exc)
-            return False
-
-
-class TextEmbedder:
-    """Generate text embeddings"""
-
-    def __init__(self, ollama_host):
-        self.ollama_host = ollama_host
-        self._tfidf = None
-
-    def embed(self, texts):
-        """Generate embeddings for texts using Ollama's nomic-embed-text model"""
-        if isinstance(texts, str):
-            texts = [texts]
-
-        # Use nomic-embed-text for semantic embeddings (768 dimensions)
-        # Batch process for efficiency
-        try:
-            # Process in batches of 10 for better performance
-            batch_size = 10
-            all_embeddings = []
-
-            for i in range(0, len(texts), batch_size):
-                batch = texts[i:i+batch_size]
-                response = httpx.post(
-                    f"{self.ollama_host}/api/embed",
-                    json={"model": "nomic-embed-text", "input": batch},
-                    timeout=120.0  # Longer timeout for batches
-                )
-                if response.status_code == 200:
-                    result = response.json()
-                    emb_list = result.get('embeddings', [])
-                    for emb in emb_list:
-                        all_embeddings.append(emb if emb else [0.0] * 768)
-                else:
-                    logger.warning(f"Ollama embed returned {response.status_code}")
-                    all_embeddings.extend([[0.0] * 768] * len(batch))
-
-            return np.array(all_embeddings)
-        except Exception as e:
-            logger.warning(f"Ollama embedding failed: {e}, using TF-IDF")
-
-        # Fallback to TF-IDF
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        if self._tfidf is None:
-            self._tfidf = TfidfVectorizer(max_features=768)
-        try:
-            if hasattr(self._tfidf, 'vocabulary_') and self._tfidf.vocabulary_:
-                return self._tfidf.transform(texts).toarray()
-            else:
-                return self._tfidf.fit_transform(texts).toarray()
-        except:
-            return np.zeros((len(texts), 768))
-
-
-class KnowledgeGraphClient:
-    """
-    Client để query Neo4j Knowledge Graph
-    Cung cấp context bổ sung cho RAG
-    """
-
-    def __init__(self):
-        self.driver = None
-        self._connect()
-
-    def _connect(self):
-        """Connect to Neo4j"""
-        try:
-            from neo4j import GraphDatabase
-            self.driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
-            logger.info(f"Connected to Neo4j at {NEO4J_URI}")
-        except Exception as e:
-            logger.warning(f"Cannot connect to Neo4j: {e}")
-            self.driver = None
-
-    def _get_session(self):
-        if self.driver is None:
-            self._connect()
-        if self.driver:
-            return self.driver.session()
-        return None
-
-    def get_product_recommendations(self, user_id, n=5):
-        """Lấy recommendations cho user từ graph"""
-        session = self._get_session()
-        if not session:
-            return []
-
-        try:
-            with session:
-                result = session.run("""
-                    MATCH (u:User {id: $user_id})-[:PURCHASED|VIEWED]->(p:Product)
-                          <-[:PURCHASED|VIEWED]-(other:User)-[:PURCHASED]->(rec:Product)
-                    WHERE NOT (u)-[:PURCHASED]->(rec)
-                    WITH rec, COUNT(DISTINCT other) AS score
-                    RETURN rec.id AS product_id, rec.name AS name, rec.price AS price, score
-                    ORDER BY score DESC
-                    LIMIT $limit
-                """, user_id=str(user_id), limit=n)
-
-                return [{
-                    'product_id': r['product_id'],
-                    'name': r['name'],
-                    'price': r['price'],
-                    'score': r['score'],
-                    'reason': 'Nguoi dung tuong tu cung thich'
-                } for r in result]
-        except Exception as e:
-            logger.error(f"Error getting recommendations: {e}")
-            return []
-
-    def get_frequently_bought_together(self, product_id, n=3):
-        """Sản phẩm thường mua cùng"""
-        session = self._get_session()
-        if not session:
-            return []
-
-        try:
-            with session:
-                result = session.run("""
-                    MATCH (p:Product {id: $product_id})<-[:PURCHASED]-(u:User)
-                          -[:PURCHASED]->(other:Product)
-                    WHERE other.id <> $product_id
-                    WITH other, COUNT(DISTINCT u) AS co_purchases
-                    RETURN other.id AS product_id, other.name AS name, co_purchases
-                    ORDER BY co_purchases DESC
-                    LIMIT $limit
-                """, product_id=str(product_id), limit=n)
-
-                return [{
-                    'product_id': r['product_id'],
-                    'name': r['name'],
-                    'co_purchases': r['co_purchases']
-                } for r in result]
-        except Exception as e:
-            logger.error(f"Error getting bought together: {e}")
-            return []
-
-    def search_by_category(self, category_keyword, n=5):
-        """Tìm sản phẩm theo category"""
-        session = self._get_session()
-        if not session:
-            return []
-
-        try:
-            with session:
-                result = session.run("""
-                    MATCH (c:Category)
-                    WHERE toLower(c.name) CONTAINS toLower($keyword)
-                    MATCH (p:Product)-[:BELONGS_TO]->(c)
-                    OPTIONAL MATCH (:User)-[r:PURCHASED]->(p)
-                    WITH p, c, COUNT(r) AS purchases
-                    WITH p, c, purchases
-                    RETURN p.id AS product_id, p.name AS name, p.price AS price,
-                           c.name AS category, purchases
-                    ORDER BY purchases DESC
-                    LIMIT $limit
-                """, keyword=category_keyword, limit=n)
-
-                return [{
-                    'product_id': r['product_id'],
-                    'name': r['name'],
-                    'price': r['price'],
-                    'category': r['category'],
-                    'score': r['purchases']
-                } for r in result]
-        except Exception as e:
-            logger.error(f"Error searching by category: {e}")
-            return []
-    def search_products_structured(self, entities: 'ExtractedEntities', n=5) -> List[Dict]:
-        """
-        Search products using structured entities from QueryParser.
-        Builds dynamic Cypher query based on extracted entities.
-
-        STRICT MATCHING: Only returns active, in-stock products that match category, brand, price, color, and material.
-        """
-        session = self._get_session()
-        if not session:
-            logger.warning("No Neo4j session available for structured search")
-            return []
-
-        try:
-            with session:
-                # Build dynamic Cypher query
-                where_clauses = [
-                    "(p.status IS NULL OR p.status = 'active')",
-                    "(p.stock_quantity IS NULL OR p.stock_quantity > 0)"
-                ]
-                params = {"limit": n}
-                matches = ["MATCH (p:Product)"]
-
-                # STRICT Category filter
-                if entities.category:
-                    matches.append("MATCH (p)-[:BELONGS_TO]->(c:Category)")
-                    where_clauses.append("toLower(c.name) CONTAINS toLower($category)")
-                    params["category"] = entities.category
-                else:
-                    matches.append("OPTIONAL MATCH (p)-[:BELONGS_TO]->(c:Category)")
-
-                # Brand filter
-                if entities.brand:
-                    matches.append("OPTIONAL MATCH (p)-[:MADE_BY]->(b:Brand)")
-                    where_clauses.append(
-                        "(toLower(p.name) CONTAINS toLower($brand) OR "
-                        "toLower(coalesce(p.brand, '')) CONTAINS toLower($brand) OR "
-                        "toLower(coalesce(b.name, '')) CONTAINS toLower($brand))"
-                    )
-                    params["brand"] = entities.brand
-
-                # Color filter
-                color_val = entities.attributes.get('color')
-                if color_val:
-                    matches.append("MATCH (p)-[:HAS_COLOR]->(co:Color)")
-                    where_clauses.append("toLower(co.name) = toLower($color)")
-                    params["color"] = color_val
-
-                # Material filter
-                material_val = entities.attributes.get('material')
-                if material_val:
-                    matches.append("MATCH (p)-[:HAS_MATERIAL]->(ma:Material)")
-                    where_clauses.append("toLower(ma.name) = toLower($material)")
-                    params["material"] = material_val
-
-                # Variant filters (RAM, SSD, Size)
-                ram_val = entities.attributes.get('ram')
-                ssd_val = entities.attributes.get('ssd')
-                size_val = entities.attributes.get('size')
-                if ram_val or ssd_val or size_val:
-                    matches.append("MATCH (p)-[:HAS_VARIANT]->(v:Variant)")
-                    if ram_val:
-                        where_clauses.append("(toLower(v.name) CONTAINS toLower($ram) OR toLower(coalesce(v.attributes.ram, '')) = toLower($ram))")
-                        params["ram"] = ram_val
-                    if ssd_val:
-                        where_clauses.append("(toLower(v.name) CONTAINS toLower($ssd) OR toLower(coalesce(v.attributes.ssd, '')) = toLower($ssd) OR toLower(coalesce(v.attributes.storage, '')) = toLower($ssd))")
-                        params["ssd"] = ssd_val
-                    if size_val:
-                        where_clauses.append("(toLower(coalesce(v.attributes.size, '')) = toLower($size) OR toLower(v.name) CONTAINS toLower($size))")
-                        params["size"] = size_val
-
-                # STRICT Price filters
-                if entities.price_max:
-                    where_clauses.append("toInteger(p.price) <= $price_max")
-                    params["price_max"] = entities.price_max
-
-                if entities.price_min:
-                    where_clauses.append("toInteger(p.price) >= $price_min")
-                    params["price_min"] = entities.price_min
-
-                with_vars = ["p", "c"]
-                if entities.brand:
-                    with_vars.append("b")
-                if color_val:
-                    with_vars.append("co")
-                if material_val:
-                    with_vars.append("ma")
-                if ram_val or ssd_val or size_val:
-                    with_vars.append("v")
-                with_clause = "WITH " + ", ".join(with_vars)
-
-                match_clause = "\n                    ".join(matches)
-                where_clause = "WHERE " + " AND ".join(where_clauses)
-
-                cypher_query = f"""
-                    {match_clause}
-                    {with_clause}
-                    {where_clause}
-                    OPTIONAL MATCH (:User)-[r:PURCHASED|VIEWED|CLICKED]->(p)
-                    WITH p, coalesce(c.name, '') AS category_name, COUNT(r) AS popularity
-                    RETURN p.id AS product_id,
-                           p.name AS name,
-                           p.price AS price,
-                           coalesce(p.brand, '') AS brand,
-                           coalesce(p.description, '') AS description,
-                           coalesce(p.image_url, '') AS image_url,
-                           category_name AS category,
-                           popularity
-                    ORDER BY popularity DESC, p.price ASC
-                    LIMIT $limit
-                """
-
-                logger.info(f"[DEBUG] Neo4j Query:\n{cypher_query}")
-                logger.info(f"[DEBUG] Query params: {params}")
-
-                result = session.run(cypher_query, **params)
-
-                products = []
-                for r in result:
-                    products.append({
-                        'product_id': r['product_id'],
-                        'name': r['name'],
-                        'price': r['price'],
-                        'brand': r['brand'],
-                        'description': r['description'],
-                        'image_url': r['image_url'],
-                        'category': r['category'],
-                        'popularity': r['popularity'],
-                        'source': 'kg_structured'
-                    })
-
-                logger.info(f"[DEBUG] Structured search found {len(products)} products: "
-                            f"{[p['name'] for p in products[:3]]}")
-                return products
-
-        except Exception as e:
-            logger.error(f"Error in structured search: {e}")
-            return []
-
-    def ask_for_clarification(self, entities: 'ExtractedEntities') -> Optional[str]:
-        """
-        Generate clarification question if entities are insufficient.
-
-        Returns:
-            Clarification question string, or None if entities are sufficient
-        """
-        if entities.confidence >= 0.4:
-            return None
-
-        if not entities.category and not entities.brand:
-            return "Bạn muốn tìm sản phẩm loại gì? (laptop, điện thoại, giày, áo, mỹ phẩm...)"
-
-        return None
-
-    def get_trending_products(self, n=5):
-        """Lấy sản phẩm trending"""
-        session = self._get_session()
-        if not session:
-            return []
-
-        try:
-            with session:
-                result = session.run("""
-                    MATCH (u:User)-[r:PURCHASED|VIEWED|CLICKED]->(p:Product)
-                    WITH p, COUNT(r) AS interactions
-                    RETURN p.id AS product_id, p.name AS name, p.price AS price, interactions
-                    ORDER BY interactions DESC
-                    LIMIT $limit
-                """, limit=n)
-
-                return [{
-                    'product_id': r['product_id'],
-                    'name': r['name'],
-                    'price': r['price'],
-                    'interactions': r['interactions'],
-                    'reason': 'San pham pho bien'
-                } for r in result]
-        except Exception as e:
-            logger.error(f"Error getting trending: {e}")
-            return []
-
-
-# Global KG client
-kg_client = KnowledgeGraphClient()
+# Global KG client — using unified singleton from lib.ai_core
+from lib.ai_core.neo4j_client import kg_client
 
 
 class RAGPipeline:
@@ -1057,14 +603,16 @@ class RAGPipeline:
     def __init__(self, ollama_host, ollama_model):
         self.ollama_host = ollama_host
         self.ollama_model = ollama_model
-        self.embedder = TextEmbedder(ollama_host)
-        self.vector_store = ProductVectorStore()
+        # Use unified AI Core singletons (Phase 2.1)
+        self.embedder = embedder
+        self.vector_store = vector_store
+        self.semantic_cache = semantic_cache
         self._indexed = False
         self.index_dir = getattr(settings, 'AI_INDEX_DIR', '/app/ai_index')
-        
+
         # Load local index if exists
         meta_path = os.path.join(self.index_dir, 'meta.json')
-        if self.vector_store.load_local(self.index_dir):
+        if self.vector_store.load(self.index_dir):
             self._indexed = True
             if os.path.exists(meta_path):
                 self._last_loaded_mtime = os.path.getmtime(meta_path)
@@ -1072,9 +620,6 @@ class RAGPipeline:
                 self._last_loaded_mtime = 0
         else:
             self._last_loaded_mtime = 0
-
-        # Initialize Redis-backed Semantic Cache
-        self.semantic_cache = RedisSemanticCache(self.embedder)
 
     def index_products(self, force: bool = False):
         """
@@ -1093,96 +638,16 @@ class RAGPipeline:
             if response.status_code == 200:
                 products = response.json().get('results', [])
 
-                texts = [self._build_product_text(p) for p in products]
-
-                if texts:
-                    embeddings = self.embedder.embed(texts)
-                    for i, (p, emb) in enumerate(zip(products, embeddings)):
-                        self.vector_store.add(
-                            product_id=p['id'],
-                            embedding=emb,
-                            product_data={
-                                'name': p.get('name', ''),
-                                'price': p.get('price'),
-                                'category': p.get('category', {}).get('name') if isinstance(p.get('category'), dict) else '',
-                                'brand': p.get('brand', '')
-                            }
-                        )
+                if products:
+                    # Use unified bulk_index — handles ACL normalization + embedding + FAISS add
+                    count = self.vector_store.bulk_index(products, self.embedder)
+                    logger.info('Indexed %d products for RAG', count)
+                else:
+                    logger.info('No products returned from product service')
 
                 self._indexed = True
-                logger.info('Indexed %d products for RAG', len(products))
         except Exception as e:
             logger.error('Failed to index products: %s', e)
-
-    @staticmethod
-    def _build_product_text(product: dict) -> str:
-        """
-        Build a structured text for embedding — replaces the old flat string join.
-
-        Strategy:
-        - Fields are separated by ' | ' so the embedding model sees clear boundaries.
-        - Includes brand, category, color, material, and description.
-        - description is chunked to the first 300 words to prevent token overflow.
-        """
-        name = product.get('name', '')
-        brand = product.get('brand', '')
-        cat = product.get('category', '')
-        if isinstance(cat, dict):
-            cat = cat.get('name', '')
-            
-        color = product.get('color', '')
-        material = product.get('material', '')
-
-        description = (
-            product.get('description') or product.get('short_description') or ''
-        ).strip()
-
-        # Chunk: keep first 300 words to avoid noisy long-tail tokens
-        desc_words = description.split()
-        if len(desc_words) > 300:
-            description = ' '.join(desc_words[:300])
-
-        parts = []
-        if name:
-            parts.append(name)
-        if brand:
-            parts.append(brand)
-        if cat:
-            parts.append(cat)
-        if color:
-            parts.append(f"Màu: {color}")
-        if material:
-            parts.append(f"Chất liệu: {material}")
-        if description:
-            parts.append(description)
-
-        # Include specifications in embedding text
-        specs = product.get('specifications')
-        if specs and isinstance(specs, dict):
-            spec_parts = [f"{k}: {v}" for k, v in specs.items()]
-            if spec_parts:
-                parts.append(f"Thông số kỹ thuật: {', '.join(spec_parts)}")
-        elif specs and isinstance(specs, str) and specs.strip():
-            parts.append(f"Thông số kỹ thuật: {specs}")
-
-        # Include variants in embedding text
-        variants = product.get('variants')
-        if variants and isinstance(variants, list):
-            var_parts = []
-            for v in variants:
-                v_name = v.get('name', '')
-                v_price = v.get('price')
-                v_stock = v.get('stock_quantity')
-                try:
-                    price_str = f"{float(v_price):,.0f}đ" if v_price is not None else "Liên hệ"
-                except (ValueError, TypeError):
-                    price_str = "Liên hệ"
-                stock_str = f"Còn {v_stock}" if v_stock is not None else "Còn hàng"
-                var_parts.append(f"[{v_name} - Giá: {price_str} - {stock_str}]")
-            if var_parts:
-                parts.append(f"Các biến thể: {', '.join(var_parts)}")
-
-        return ' | '.join(parts)
 
     def _merge_hybrid(
         self,
@@ -1577,6 +1042,161 @@ class RAGPipeline:
             return True
         return False
 
+    # ─────────────────────────────────────────────────────────────
+    # KG Search helpers (migrated from deprecated KnowledgeGraphClient)
+    # ─────────────────────────────────────────────────────────────
+
+    def _kg_search_structured(self, entities: 'ExtractedEntities', n=5) -> List[Dict]:
+        """
+        Search Neo4j using structured entities from QueryParser.
+        Builds dynamic Cypher query. STRICT MATCHING: only active, in-stock products.
+        """
+        session = kg_client._get_session()
+        if not session:
+            logger.warning("No Neo4j session available for structured search")
+            return []
+
+        try:
+            with session:
+                where_clauses = [
+                    "(p.status IS NULL OR p.status = 'active')",
+                    "(p.stock_quantity IS NULL OR p.stock_quantity > 0)"
+                ]
+                params = {"limit": n}
+                matches = ["MATCH (p:Product)"]
+
+                if entities.category:
+                    matches.append("MATCH (p)-[:BELONGS_TO]->(c:Category)")
+                    where_clauses.append("c.name_lower CONTAINS $category_lower")
+                    params["category_lower"] = entities.category.lower()
+                else:
+                    matches.append("OPTIONAL MATCH (p)-[:BELONGS_TO]->(c:Category)")
+
+                if entities.brand:
+                    matches.append("OPTIONAL MATCH (p)-[:MADE_BY]->(b:Brand)")
+                    where_clauses.append(
+                        "(p.name_lower CONTAINS $brand_lower OR "
+                        "toLower(coalesce(p.brand, '')) CONTAINS $brand_lower OR "
+                        "coalesce(b.name_lower, '') CONTAINS $brand_lower)"
+                    )
+                    params["brand_lower"] = entities.brand.lower()
+
+                color_val = entities.attributes.get('color')
+                if color_val:
+                    matches.append("MATCH (p)-[:HAS_COLOR]->(co:Color)")
+                    where_clauses.append("toLower(co.name) = toLower($color)")
+                    params["color"] = color_val
+
+                material_val = entities.attributes.get('material')
+                if material_val:
+                    matches.append("MATCH (p)-[:HAS_MATERIAL]->(ma:Material)")
+                    where_clauses.append("toLower(ma.name) = toLower($material)")
+                    params["material"] = material_val
+
+                ram_val = entities.attributes.get('ram')
+                ssd_val = entities.attributes.get('ssd')
+                size_val = entities.attributes.get('size')
+                if ram_val or ssd_val or size_val:
+                    matches.append("MATCH (p)-[:HAS_VARIANT]->(v:Variant)")
+                    if ram_val:
+                        where_clauses.append("(toLower(v.name) CONTAINS toLower($ram) OR toLower(coalesce(v.attributes.ram, '')) = toLower($ram))")
+                        params["ram"] = ram_val
+                    if ssd_val:
+                        where_clauses.append("(toLower(v.name) CONTAINS toLower($ssd) OR toLower(coalesce(v.attributes.ssd, '')) = toLower($ssd) OR toLower(coalesce(v.attributes.storage, '')) = toLower($ssd))")
+                        params["ssd"] = ssd_val
+                    if size_val:
+                        where_clauses.append("(toLower(coalesce(v.attributes.size, '')) = toLower($size) OR toLower(v.name) CONTAINS toLower($size))")
+                        params["size"] = size_val
+
+                if entities.price_max:
+                    where_clauses.append("toInteger(p.price) <= $price_max")
+                    params["price_max"] = entities.price_max
+                if entities.price_min:
+                    where_clauses.append("toInteger(p.price) >= $price_min")
+                    params["price_min"] = entities.price_min
+
+                with_vars = ["p", "c"]
+                if entities.brand:
+                    with_vars.append("b")
+                if color_val:
+                    with_vars.append("co")
+                if material_val:
+                    with_vars.append("ma")
+                if ram_val or ssd_val or size_val:
+                    with_vars.append("v")
+                with_clause = "WITH " + ", ".join(with_vars)
+
+                match_clause = "\n                    ".join(matches)
+                where_clause = "WHERE " + " AND ".join(where_clauses)
+
+                cypher_query = f"""
+                    {match_clause}
+                    {with_clause}
+                    {where_clause}
+                    OPTIONAL MATCH (:User)-[r:PURCHASED|VIEWED|CLICKED]->(p)
+                    WITH p, coalesce(c.name, '') AS category_name, COUNT(r) AS popularity
+                    RETURN p.id AS product_id,
+                           p.name AS name,
+                           p.price AS price,
+                           coalesce(p.brand, '') AS brand,
+                           coalesce(p.description, '') AS description,
+                           coalesce(p.image_url, '') AS image_url,
+                           category_name AS category,
+                           popularity
+                    ORDER BY popularity DESC, p.price ASC
+                    LIMIT $limit
+                """
+
+                result = session.run(cypher_query, **params)
+                products = []
+                for r in result:
+                    products.append({
+                        'product_id': r['product_id'],
+                        'name': r['name'],
+                        'price': r['price'],
+                        'brand': r['brand'],
+                        'description': r['description'],
+                        'image_url': r['image_url'],
+                        'category': r['category'],
+                        'popularity': r['popularity'],
+                        'source': 'kg_structured'
+                    })
+                return products
+
+        except Exception as e:
+            logger.error(f"Error in structured search: {e}")
+            return []
+
+    def _kg_search_by_category(self, keyword: str, n: int = 5) -> List[Dict]:
+        """Search Neo4j products by category keyword."""
+        session = kg_client._get_session()
+        if not session:
+            return []
+        try:
+            with session:
+                result = session.run("""
+                    MATCH (c:Category)
+                    WHERE c.name_lower CONTAINS $keyword_lower
+                    MATCH (p:Product)-[:BELONGS_TO]->(c)
+                    OPTIONAL MATCH (:User)-[r:PURCHASED]->(p)
+                    WITH p, c, COUNT(r) AS purchases
+                    RETURN p.id AS product_id, p.name AS name, p.price AS price,
+                           c.name AS category, purchases
+                    ORDER BY purchases DESC
+                    LIMIT $limit
+                """, keyword_lower=keyword.lower(), limit=n)
+
+                return [{
+                    'product_id': r['product_id'],
+                    'name': r['name'],
+                    'price': r['price'],
+                    'category': r['category'],
+                    'score': r['purchases']
+                } for r in result]
+        except Exception as e:
+            logger.error(f"Error searching by category: {e}")
+            return []
+
     def _query_knowledge_graph_structured(self, entities: ExtractedEntities, user_id=None, k=5):
         """
         Query Knowledge Graph using structured entities.
@@ -1615,7 +1235,7 @@ class RAGPipeline:
                 )
 
         # ── Step 2: Search with mapped category ───────────────────────────────
-        structured_results = kg_client.search_products_structured(search_entities, n=k)
+        structured_results = self._kg_search_structured(search_entities, n=k)
         logger.info(
             '[KG] Primary search (category=%r, original=%r) → %d results',
             search_entities.category, original_category, len(structured_results),
@@ -1636,7 +1256,7 @@ class RAGPipeline:
                     confidence=entities.confidence,
                     raw_query=entities.raw_query,
                 )
-                alias_results = kg_client.search_products_structured(alias_entities, n=k)
+                alias_results = self._kg_search_structured(alias_entities, n=k)
                 if alias_results:
                     logger.info(
                         '[KG] Fallback alias "%s" → %d results (original: %r)',
@@ -1652,7 +1272,7 @@ class RAGPipeline:
         results = []
 
         # Get trending if no specific user
-        trending = kg_client.get_trending_products(n=k // 2)
+        trending = kg_client.get_trending(n=k // 2)
         for p in trending:
             p['source'] = 'kg_trending'
         results.extend(trending)
@@ -1662,7 +1282,7 @@ class RAGPipeline:
                     'thoi trang', 'gia dung', 'sach', 'the thao', 'my pham']
         for kw in keywords:
             if kw in query.lower():
-                cat_results = kg_client.search_by_category(kw, n=k // 2)
+                cat_results = self._kg_search_by_category(kw, n=k // 2)
                 for p in cat_results:
                     p['source'] = 'kg_category'
                 results.extend(cat_results)
@@ -1828,7 +1448,18 @@ class RAGPipeline:
             if response.status_code == 200:
                 result = response.json().get('response', '')
                 if result:
-                    # If LLM says "không tìm thấy" despite products existing, use fallback with citations
+                    # ── Guardrails (Phase 2.4) ────────────────────────────
+                    # 1. Safety check — block harmful/spam content
+                    if Guardrails.check_safety(result):
+                        logger.warning('[RAG-Guardrails] Safety check failed — using fallback')
+                        return self._fallback_response(grounded_products)
+
+                    # 2. Hallucination check — detect products not in context
+                    if Guardrails.check_hallucination(result, grounded_products):
+                        logger.warning('[RAG-Guardrails] Hallucination detected — using fallback')
+                        return self._fallback_response(grounded_products)
+
+                    # 3. If LLM says "không tìm thấy" despite products existing, use fallback
                     llm_gave_empty = any(
                         phrase in result.lower()
                         for phrase in ['không tìm thấy', 'khong tim thay', 'không có sản phẩm']
@@ -1836,7 +1467,11 @@ class RAGPipeline:
                     if llm_gave_empty and grounded_products:
                         logger.warning('[RAG] LLM returned empty-result phrase despite having %d products — using fallback', len(grounded_products))
                         return self._fallback_response(grounded_products)
+
+                    # 4. Citation enforcement
                     result = self._ensure_citations(result, grounded_products)
+                    result = Guardrails.check_citation(result, grounded_products)
+
                     cache.set(cache_key, result, timeout=600)
                     return result
         except httpx.TimeoutException:
@@ -1866,7 +1501,7 @@ class RAGPipeline:
             logger.info('[RAG-async] Response from cache')
             return cached
 
-        context = self._build_context(grounded_products)
+        context = await self._build_context_async(grounded_products)
 
         kg_info = ""
         if kg_context and kg_context.get('bought_together'):
@@ -1895,6 +1530,15 @@ class RAGPipeline:
             if response.status_code == 200:
                 result = response.json().get('response', '')
                 if result:
+                    # ── Guardrails (Phase 2.4) ────────────────────────────
+                    if Guardrails.check_safety(result):
+                        logger.warning('[RAG-async-Guardrails] Safety check failed — using fallback')
+                        return self._fallback_response(grounded_products)
+
+                    if Guardrails.check_hallucination(result, grounded_products):
+                        logger.warning('[RAG-async-Guardrails] Hallucination detected — using fallback')
+                        return self._fallback_response(grounded_products)
+
                     llm_gave_empty = any(
                         phrase in result.lower()
                         for phrase in ['không tìm thấy', 'khong tim thay', 'không có sản phẩm']
@@ -1902,7 +1546,10 @@ class RAGPipeline:
                     if llm_gave_empty and grounded_products:
                         logger.warning('[RAG-async] LLM returned empty-result phrase despite having %d products — using fallback', len(grounded_products))
                         return self._fallback_response(grounded_products)
+
                     result = self._ensure_citations(result, grounded_products)
+                    result = Guardrails.check_citation(result, grounded_products)
+
                     cache.set(cache_key, result, timeout=600)
                     return result
         except asyncio.TimeoutError:
@@ -1914,7 +1561,7 @@ class RAGPipeline:
 
     def _fetch_review_stats(self, product_id):
         """
-        Fetch reviews and statistics for a product from review-service.
+        Fetch reviews and statistics for a product from review-service (sync).
         """
         import httpx
         review_url = getattr(settings, 'REVIEW_SERVICE_URL', 'http://review-service:8008')
@@ -1922,24 +1569,51 @@ class RAGPipeline:
             with httpx.Client(timeout=1.5) as client:
                 stats_res = client.get(f"{review_url}/product/{product_id}/stats/")
                 reviews_res = client.get(f"{review_url}/product/{product_id}/")
-                
+
                 stats = {}
                 if stats_res.status_code == 200:
                     stats = stats_res.json()
-                
+
                 reviews = []
                 if reviews_res.status_code == 200:
                     reviews = reviews_res.json()
-                
+
                 return stats, reviews
         except Exception as e:
             logger.warning("Failed to fetch review stats for product %s: %s", product_id, e)
             return {}, []
 
+    async def _fetch_review_stats_async(self, product_id):
+        """
+        Fetch reviews and statistics for a product ASYNC — non-blocking.
+        Uses httpx.AsyncClient so the event loop is not blocked.
+        """
+        review_url = getattr(settings, 'REVIEW_SERVICE_URL', 'http://review-service:8008')
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                stats_res, reviews_res = await asyncio.gather(
+                    client.get(f"{review_url}/product/{product_id}/stats/"),
+                    client.get(f"{review_url}/product/{product_id}/"),
+                    return_exceptions=True,
+                )
+
+                stats = {}
+                if isinstance(stats_res, httpx.Response) and stats_res.status_code == 200:
+                    stats = stats_res.json()
+
+                reviews = []
+                if isinstance(reviews_res, httpx.Response) and reviews_res.status_code == 200:
+                    reviews = reviews_res.json()
+
+                return stats, reviews
+        except Exception as e:
+            logger.warning("Failed to fetch review stats async for product %s: %s", product_id, e)
+            return {}, []
+
     def _build_context(self, products):
         """
-        Build context string injected into the LLM prompt.
-        Each line includes [ID: xxx] so the LLM can cite the source product.
+        Sync context builder — fetches review stats sequentially.
+        Used by the sync generate_augmented_response() path.
         """
         lines = []
         for i, p in enumerate(products[:5], 1):
@@ -1956,8 +1630,7 @@ class RAGPipeline:
                 line += f" ({data['category']})"
             if data.get('brand'):
                 line += f" | {data['brand']}"
-            
-            # Fetch review stats
+
             stats, reviews = self._fetch_review_stats(pid)
             if stats and stats.get('total_reviews', 0) > 0:
                 avg_rating = stats.get('avg_rating', 0)
@@ -1967,6 +1640,49 @@ class RAGPipeline:
                     comments = [f"\"{r.get('content')}\"" for r in reviews if r.get('content')]
                     if comments:
                         line += f" | Một số bình luận: {', '.join(comments[:2])}"
+            lines.append(line)
+        return '\n'.join(lines)
+
+    async def _build_context_async(self, products):
+        """
+        Async context builder — fetches review stats IN PARALLEL via asyncio.gather.
+        This does NOT block the event loop during review service calls.
+        Phase 2.2 optimization.
+        """
+        lines = []
+        # Fetch all review stats in parallel
+        tasks = [
+            self._fetch_review_stats_async(p.get('product_id', 'unknown'))
+            for p in products[:5]
+        ]
+        review_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for i, (p, review_result) in enumerate(zip(products[:5], review_results), 1):
+            data = p.get('data', {})
+            pid = p.get('product_id', 'unknown')
+            line = f"{i}. [ID: {pid}] {data.get('name', 'Unknown')}"
+            if data.get('price'):
+                try:
+                    price = float(data['price'])
+                    line += f" - {price:,.0f}đ"
+                except (ValueError, TypeError):
+                    line += f" - {data['price']}đ"
+            if data.get('category'):
+                line += f" ({data['category']})"
+            if data.get('brand'):
+                line += f" | {data['brand']}"
+
+            # Unpack review result
+            if isinstance(review_result, tuple) and len(review_result) == 2:
+                stats, reviews = review_result
+                if stats and stats.get('total_reviews', 0) > 0:
+                    avg_rating = stats.get('avg_rating', 0)
+                    total_reviews = stats.get('total_reviews', 0)
+                    line += f" | Đánh giá: {avg_rating}/5 ({total_reviews} nhận xét)"
+                    if reviews:
+                        comments = [f"\"{r.get('content')}\"" for r in reviews if r.get('content')]
+                        if comments:
+                            line += f" | Một số bình luận: {', '.join(comments[:2])}"
             lines.append(line)
         return '\n'.join(lines)
 
