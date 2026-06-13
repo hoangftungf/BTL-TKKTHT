@@ -131,10 +131,10 @@ const Chatbot = () => {
 
   // Quick action buttons
   const quickActions = [
-    { text: 'Tim laptop', icon: '💻' },
-    { text: 'San pham ban chay', icon: '🔥' },
-    { text: 'Goi y cho toi', icon: '💡' },
-    { text: 'Chinh sach doi tra', icon: '📋' },
+    { text: 'Tìm laptop', icon: '💻' },
+    { text: 'Sản phẩm bán chạy', icon: '🔥' },
+    { text: 'Gợi ý cho tôi', icon: '💡' },
+    { text: 'Chính sách đổi trả', icon: '📋' },
   ];
 
   const handleQuickAction = (action) => {
@@ -313,7 +313,7 @@ const Chatbot = () => {
               initial="hidden"
               animate="visible"
             >
-              <p className="text-xs text-gray-500 font-medium">San pham goi y:</p>
+              <p className="text-xs text-gray-500 font-medium">Sản phẩm gợi ý:</p>
               <div className="space-y-2">
                 {msg.products.slice(0, 3).map((product, idx) => (
                   <motion.div key={idx} variants={staggerItem}>
@@ -333,7 +333,7 @@ const Chatbot = () => {
               transition={{ delay: 0.2 }}
             >
               <p className="text-xs text-yellow-700 font-medium mb-1">
-                🛒 Thuong mua kem:
+                🛒 Thường mua kèm:
               </p>
               <div className="flex flex-wrap gap-1">
                 {msg.boughtTogether.slice(0, 3).map((item, idx) => (
@@ -416,7 +416,7 @@ const Chatbot = () => {
                 animate={{ opacity: 1, y: 0 }}
                 className="p-3 border-b bg-gray-50"
               >
-                <p className="text-xs text-gray-500 mb-2">Goi y nhanh:</p>
+                <p className="text-xs text-gray-500 mb-2">Gợi ý nhanh:</p>
                 <div className="flex flex-wrap gap-2">
                   {quickActions.map((action, idx) => (
                     <motion.button
@@ -474,7 +474,7 @@ const Chatbot = () => {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  placeholder="Nhap tin nhan..."
+                  placeholder="Nhập tin nhắn..."
                   className="flex-1 border border-gray-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   disabled={loading}
                 />

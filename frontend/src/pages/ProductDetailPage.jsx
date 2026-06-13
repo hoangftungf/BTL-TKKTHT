@@ -208,7 +208,7 @@ const ProductDetailPage = () => {
     if (isInWishlist) {
       dispatch(removeFromWishlist(product.id))
         .unwrap()
-        .then(() => toast.success('Đã xoá khỏi yêu thích'))
+        .then(() => toast.success('Đã xóa khỏi yêu thích'))
         .catch((err) => toast.error(err));
     } else {
       dispatch(addToWishlist(product.id))
