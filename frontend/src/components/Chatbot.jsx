@@ -9,6 +9,207 @@ import { formatPrice } from '../utils/format';
 import toast from 'react-hot-toast';
 import { scaleInBounce, fadeInUp, staggerContainer, staggerItem } from '../utils/animations';
 
+// Product card component for chat (defined outside to prevent re-mount on every keystroke)
+const ChatProductCard = ({ product, onCloseChat }) => {
+  const dispatch = useDispatch();
+  const { isAuthenticated } = useSelector((state) => state.auth);
+
+  const data = product.data || product;
+  const productId = product.product_id || product.id;
+  const variants = data.variants || [];
+  const specs = data.specifications || {};
+
+  let specSummary = "";
+  if (variants.length > 0) {
+    const colors = new Set();
+    const sizes = new Set();
+    variants.forEach(v => {
+      if (v.attributes) {
+        const color = v.attributes.color || v.attributes['Màu sắc'] || v.attributes['Màu'];
+        const size = v.attributes.size || v.attributes['Kích cỡ'] || v.attributes['Size'] || v.attributes['Kích thước'];
+        if (color) colors.add(color);
+        if (size) sizes.add(size);
+      }
+    });
+    const parts = [];
+    if (colors.size > 0) parts.push(`Màu: ${Array.from(colors).join(', ')}`);
+    if (sizes.size > 0) parts.push(`Size: ${Array.from(sizes).join(', ')}`);
+    specSummary = parts.join(' | ');
+  } else if (specs && Object.keys(specs).length > 0) {
+    specSummary = Object.entries(specs).slice(0, 2).map(([k, v]) => `${k}: ${v}`).join(' | ');
+  }
+
+  const handleAddToCart = (e, p) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!isAuthenticated) {
+      dispatch(setLoginModalOpen(true));
+      return;
+    }
+
+    const d = p.data || p;
+    const v = d.variants || [];
+
+    if (v.length === 0) {
+      dispatch(addToCart({ productId: p.product_id || p.id, quantity: 1 }))
+        .unwrap()
+        .then(() => toast.success('Đã thêm vào giỏ hàng'))
+        .catch((err) => toast.error(err));
+    } else if (v.length === 1) {
+      dispatch(addToCart({ productId: p.product_id || p.id, quantity: 1, variantId: v[0].id }))
+        .unwrap()
+        .then(() => toast.success('Đã thêm vào giỏ hàng'))
+        .catch((err) => toast.error(err));
+    }
+  };
+
+  return (
+    <motion.div
+      className="flex items-center p-2 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-all relative group"
+      whileHover={{ scale: 1.02, y: -2 }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      <Link
+        to={`/products/${productId}`}
+        onClick={() => onCloseChat?.()}
+        className="flex flex-1 items-center min-w-0"
+      >
+        <div className="w-12 h-12 bg-gray-50 rounded flex items-center justify-center text-xl flex-shrink-0 border border-gray-100 overflow-hidden">
+          {data.image_url ? (
+            <img src={data.image_url} alt="" className="w-full h-full object-contain" />
+          ) : '📦'}
+        </div>
+        <div className="ml-3 flex-1 min-w-0 pr-8">
+          <p className="text-xs font-semibold text-gray-900 truncate">
+            {data.name || `Product ${productId}`}
+          </p>
+          {specSummary && (
+            <p className="text-[10px] text-gray-400 truncate mt-0.5">
+              {specSummary}
+            </p>
+          )}
+          {data.price && (
+            <p className="text-xs text-red-500 font-bold mt-0.5">
+              {formatPrice(data.price)}
+            </p>
+          )}
+        </div>
+      </Link>
+      <motion.button
+        onClick={(e) => handleAddToCart(e, product)}
+        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm flex items-center justify-center"
+        title="Thêm vào giỏ hàng"
+        whileTap={{ scale: 0.9 }}
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      </motion.button>
+    </motion.div>
+  );
+};
+
+// Message component (defined outside to prevent re-mount on every keystroke)
+const ChatMessage = ({ msg, index, onCloseChat }) => {
+  const isUser = msg.role === 'user';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: isUser ? 20 : -20, scale: 0.95 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
+      transition={{ duration: 0.25, delay: index * 0.05 }}
+      className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+    >
+      <div className={`max-w-[85%] ${isUser ? '' : 'space-y-2'}`}>
+        {/* Avatar for assistant */}
+        {!isUser && (
+          <div className="flex items-center space-x-2 mb-1">
+            <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
+              <span className="text-white text-xs">AI</span>
+            </div>
+            <span className="text-xs text-gray-500">AI Assistant</span>
+            {msg.usedKG && (
+              <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">
+                + Knowledge Graph
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Message content */}
+        <div
+          className={`px-4 py-2 rounded-lg ${
+            isUser
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 text-gray-800'
+          }`}
+        >
+          <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+        </div>
+
+        {/* Products */}
+        {msg.products && msg.products.length > 0 && (
+          <motion.div
+            className="mt-2 space-y-2"
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+          >
+            <p className="text-xs text-gray-500 font-medium">Sản phẩm gợi ý:</p>
+            <div className="space-y-2">
+              {msg.products.slice(0, 3).map((product, idx) => (
+                <motion.div key={idx} variants={staggerItem}>
+                  <ChatProductCard product={product} onCloseChat={onCloseChat} />
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Bought Together */}
+        {msg.boughtTogether && msg.boughtTogether.length > 0 && (
+          <motion.div
+            className="mt-2 p-2 bg-yellow-50 rounded-lg border border-yellow-200"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <p className="text-xs text-yellow-700 font-medium mb-1">
+              🛒 Thường mua kèm:
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {msg.boughtTogether.slice(0, 3).map((item, idx) => (
+                <Link
+                  key={idx}
+                  to={`/products/${item.product_id}`}
+                  onClick={() => onCloseChat?.()}
+                  className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded hover:bg-yellow-200"
+                >
+                  {item.name || item.product_id}
+                </Link>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </div>
+    </motion.div>
+  );
+};
+
+const getAttributeLabel = (key) => {
+  const labels = {
+    ram: 'RAM',
+    ssd: 'SSD',
+    color: 'Màu sắc',
+    size: 'Kích cỡ',
+    material: 'Chất liệu',
+    storage: 'Dung lượng'
+  };
+  return labels[key.toLowerCase()] || key.charAt(0).toUpperCase() + key.slice(1);
+};
+
 const Chatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
@@ -39,18 +240,6 @@ const Chatbot = () => {
       }
     }
   }, [messages, isOpen]);
-
-  const getAttributeLabel = (key) => {
-    const labels = {
-      ram: 'RAM',
-      ssd: 'SSD',
-      color: 'Màu sắc',
-      size: 'Kích cỡ',
-      material: 'Chất liệu',
-      storage: 'Dung lượng'
-    };
-    return labels[key.toLowerCase()] || key.charAt(0).toUpperCase() + key.slice(1);
-  };
 
   const handleAddToCartClick = (e, p) => {
     e.preventDefault();
@@ -193,166 +382,7 @@ const Chatbot = () => {
     }
   };
 
-  // Product card component for chat
-  const ChatProductCard = ({ product }) => {
-    const data = product.data || product;
-    const productId = product.product_id || product.id;
-    const variants = data.variants || [];
-    const specs = data.specifications || {};
-
-    let specSummary = "";
-    if (variants.length > 0) {
-      const colors = new Set();
-      const sizes = new Set();
-      variants.forEach(v => {
-        if (v.attributes) {
-          const color = v.attributes.color || v.attributes['Màu sắc'] || v.attributes['Màu'];
-          const size = v.attributes.size || v.attributes['Kích cỡ'] || v.attributes['Size'] || v.attributes['Kích thước'];
-          if (color) colors.add(color);
-          if (size) sizes.add(size);
-        }
-      });
-      const parts = [];
-      if (colors.size > 0) parts.push(`Màu: ${Array.from(colors).join(', ')}`);
-      if (sizes.size > 0) parts.push(`Size: ${Array.from(sizes).join(', ')}`);
-      specSummary = parts.join(' | ');
-    } else if (specs && Object.keys(specs).length > 0) {
-      specSummary = Object.entries(specs).slice(0, 2).map(([k, v]) => `${k}: ${v}`).join(' | ');
-    }
-
-    return (
-      <motion.div
-        className="flex items-center p-2 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-all relative group"
-        whileHover={{ scale: 1.02, y: -2 }}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <Link
-          to={`/products/${productId}`}
-          onClick={() => setIsOpen(false)}
-          className="flex flex-1 items-center min-w-0"
-        >
-          <div className="w-12 h-12 bg-gray-50 rounded flex items-center justify-center text-xl flex-shrink-0 border border-gray-100 overflow-hidden">
-            {data.image_url ? (
-              <img src={data.image_url} alt="" className="w-full h-full object-contain" />
-            ) : '📦'}
-          </div>
-          <div className="ml-3 flex-1 min-w-0 pr-8">
-            <p className="text-xs font-semibold text-gray-900 truncate">
-              {data.name || `Product ${productId}`}
-            </p>
-            {specSummary && (
-              <p className="text-[10px] text-gray-400 truncate mt-0.5">
-                {specSummary}
-              </p>
-            )}
-            {data.price && (
-              <p className="text-xs text-red-500 font-bold mt-0.5">
-                {formatPrice(data.price)}
-              </p>
-            )}
-          </div>
-        </Link>
-        <motion.button
-          onClick={(e) => handleAddToCartClick(e, product)}
-          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm flex items-center justify-center"
-          title="Thêm vào giỏ hàng"
-          whileTap={{ scale: 0.9 }}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-          </svg>
-        </motion.button>
-      </motion.div>
-    );
-  };
-
-  // Message component
-  const ChatMessage = ({ msg, index }) => {
-    const isUser = msg.role === 'user';
-
-    return (
-      <motion.div
-        initial={{ opacity: 0, x: isUser ? 20 : -20, scale: 0.95 }}
-        animate={{ opacity: 1, x: 0, scale: 1 }}
-        transition={{ duration: 0.25, delay: index * 0.05 }}
-        className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
-      >
-        <div className={`max-w-[85%] ${isUser ? '' : 'space-y-2'}`}>
-          {/* Avatar for assistant */}
-          {!isUser && (
-            <div className="flex items-center space-x-2 mb-1">
-              <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
-                <span className="text-white text-xs">AI</span>
-              </div>
-              <span className="text-xs text-gray-500">AI Assistant</span>
-              {msg.usedKG && (
-                <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">
-                  + Knowledge Graph
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Message content */}
-          <div
-            className={`px-4 py-2 rounded-lg ${
-              isUser
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-800'
-            }`}
-          >
-            <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-          </div>
-
-          {/* Products */}
-          {msg.products && msg.products.length > 0 && (
-            <motion.div
-              className="mt-2 space-y-2"
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
-            >
-              <p className="text-xs text-gray-500 font-medium">Sản phẩm gợi ý:</p>
-              <div className="space-y-2">
-                {msg.products.slice(0, 3).map((product, idx) => (
-                  <motion.div key={idx} variants={staggerItem}>
-                    <ChatProductCard product={product} />
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {/* Bought Together */}
-          {msg.boughtTogether && msg.boughtTogether.length > 0 && (
-            <motion.div
-              className="mt-2 p-2 bg-yellow-50 rounded-lg border border-yellow-200"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <p className="text-xs text-yellow-700 font-medium mb-1">
-                🛒 Thường mua kèm:
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {msg.boughtTogether.slice(0, 3).map((item, idx) => (
-                  <Link
-                    key={idx}
-                    to={`/products/${item.product_id}`}
-                    onClick={() => setIsOpen(false)}
-                    className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded hover:bg-yellow-200"
-                  >
-                    {item.name || item.product_id}
-                  </Link>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </div>
-      </motion.div>
-    );
-  };
+  const closeChat = () => setIsOpen(false);
 
   return (
     <>
@@ -436,7 +466,7 @@ const Chatbot = () => {
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.map((msg, index) => (
-                <ChatMessage key={index} msg={msg} index={index} />
+                <ChatMessage key={index} msg={msg} index={index} onCloseChat={closeChat} />
               ))}
               {loading && (
                 <motion.div
