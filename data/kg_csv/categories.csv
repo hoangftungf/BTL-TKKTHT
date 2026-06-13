@@ -1,0 +1,41 @@
+category_id:ID,name_vi,name_en,slug,level:int,parent_id,:LABEL
+cat_electronics,Dien tu - Cong nghe,Electronics,electronics,0,,Category
+cat_phones,Dien thoai & Phu kien,Phones & Accessories,phones-accessories,1,cat_electronics,Category
+cat_smartphone,Dien thoai Smartphone,Smartphone,smartphone,2,cat_phones,Category
+cat_tablet,May tinh bang,Tablet,tablet,2,cat_phones,Category
+cat_phone_acc,Phu kien dien thoai,Phone Accessories,phone-accessories,2,cat_phones,Category
+cat_computers,May tinh & Laptop,Computers & Laptops,computers-laptops,1,cat_electronics,Category
+cat_laptop,Laptop,Laptop,laptop,2,cat_computers,Category
+cat_desktop,PC de ban,Desktop PC,desktop-pc,2,cat_computers,Category
+cat_components,Linh kien may tinh,Computer Components,computer-components,2,cat_computers,Category
+cat_audio,Thiet bi am thanh,Audio Devices,audio-devices,1,cat_electronics,Category
+cat_headphones,Tai nghe,Headphones,headphones,2,cat_audio,Category
+cat_speakers,Loa,Speakers,speakers,2,cat_audio,Category
+cat_fashion,Thoi trang,Fashion,fashion,0,,Category
+cat_fashion_men,Thoi trang Nam,Men Fashion,men-fashion,1,cat_fashion,Category
+cat_shirt_men,Ao nam,Men Shirts,men-shirts,2,cat_fashion_men,Category
+cat_pants_men,Quan nam,Men Pants,men-pants,2,cat_fashion_men,Category
+cat_shoes_men,Giay nam,Men Shoes,men-shoes,2,cat_fashion_men,Category
+cat_fashion_women,Thoi trang Nu,Women Fashion,women-fashion,1,cat_fashion,Category
+cat_dress,Dam/Vay,Dresses,dresses,2,cat_fashion_women,Category
+cat_tops_women,Ao nu,Women Tops,women-tops,2,cat_fashion_women,Category
+cat_shoes_women,Giay nu,Women Shoes,women-shoes,2,cat_fashion_women,Category
+cat_bags,Tui xach & Balo,Bags & Backpacks,bags-backpacks,1,cat_fashion,Category
+cat_watches,Dong ho,Watches,watches,1,cat_fashion,Category
+cat_beauty,Lam dep - My pham,Beauty & Cosmetics,beauty-cosmetics,0,,Category
+cat_skincare,Cham soc da,Skincare,skincare,1,cat_beauty,Category
+cat_cleanser,Sua rua mat,Cleansers,cleansers,2,cat_skincare,Category
+cat_moisturizer,Kem duong am,Moisturizers,moisturizers,2,cat_skincare,Category
+cat_serum,Serum & Tinh chat,Serums & Essences,serums-essences,2,cat_skincare,Category
+cat_makeup,Trang diem,Makeup,makeup,1,cat_beauty,Category
+cat_lipstick,Son moi,Lipsticks,lipsticks,2,cat_makeup,Category
+cat_foundation,Kem nen & Phan phu,Foundation & Powder,foundation-powder,2,cat_makeup,Category
+cat_haircare,Cham soc toc,Haircare,haircare,1,cat_beauty,Category
+cat_perfume,Nuoc hoa,Perfume,perfume,1,cat_beauty,Category
+cat_home,Nha cua - Doi song,Home & Living,home-living,0,,Category
+cat_kitchen,Do dung nha bep,Kitchen,kitchen,1,cat_home,Category
+cat_cookware,Noi chao,Cookware,cookware,2,cat_kitchen,Category
+cat_kitchen_appliances,Thiet bi nha bep,Kitchen Appliances,kitchen-appliances,2,cat_kitchen,Category
+cat_bedroom,Phong ngu,Bedroom,bedroom,1,cat_home,Category
+cat_bathroom,Phong tam,Bathroom,bathroom,1,cat_home,Category
+cat_appliances,Thiet bi gia dung,Home Appliances,home-appliances,1,cat_home,Category
