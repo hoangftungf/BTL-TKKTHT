@@ -788,7 +788,7 @@ class RAGPipeline:
 
         if should_run_vector:
             try:
-                query_embs = self.embedder.embed(query)
+                query_embs = self.embedder.embed_sync(query)
                 if len(query_embs) > 0:
                     raw_hits = self.vector_store.search(query_embs[0], k=k * 2)
                     # Score threshold: drop low-relevance hits
