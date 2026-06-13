@@ -22,6 +22,9 @@ wheels/
 .installed.cfg
 *.egg
 
+# Python virtual envs (but not our custom lib/ at project root)
+!lib/
+
 # Virtual environments
 venv/
 ENV/

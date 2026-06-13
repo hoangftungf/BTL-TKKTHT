@@ -4,6 +4,8 @@ Management command: build_ai_index
 Pre-builds the FAISS vector index for the AI chatbot so the service starts up
 fast without blocking any request thread on the first chat message.
 
+Uses unified AI Core components (Phase 2.1).
+
 Usage:
     python manage.py build_ai_index
     python manage.py build_ai_index --index-dir /data/ai_index
@@ -25,7 +27,8 @@ import httpx
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from chatbot_app.engine import ProductVectorStore, TextEmbedder
+from lib.ai_core.embedder import embedder
+from lib.ai_core.vector_store import vector_store
 
 
 class Command(BaseCommand):
@@ -66,65 +69,28 @@ class Command(BaseCommand):
 
         self.stdout.write(f'[build_ai_index] Fetched {len(products)} products.')
 
-        # ── 2. Build text representations (with chunking) ───────────────────
-        from chatbot_app.engine import RAGPipeline  # import here to avoid circular at module level
-
-        texts = [RAGPipeline._build_product_text(p) for p in products]
-        self.stdout.write(f'[build_ai_index] Built {len(texts)} text representations.')
-
-        # ── 3. Generate embeddings ───────────────────────────────────────────
-        ollama_host = getattr(settings, 'OLLAMA_HOST', 'http://ollama:11434')
-        ollama_model = getattr(settings, 'OLLAMA_MODEL', 'llama3.2')
-
-        embedder = TextEmbedder(ollama_host)
-        self.stdout.write('[build_ai_index] Generating embeddings (this may take several minutes) ...')
+        # ── 2. Bulk index (handles ACL normalization + embedding + FAISS add) ─
+        self.stdout.write('[build_ai_index] Generating embeddings and indexing ...')
 
         t0 = time.perf_counter()
-        embeddings = embedder.embed(texts)
+        count = vector_store.bulk_index(products, embedder)
         elapsed = time.perf_counter() - t0
 
-        if len(embeddings) == 0:
-            raise CommandError('Embedding generation returned empty array.')
+        if count == 0:
+            raise CommandError('Indexing returned 0 products — something went wrong.')
 
         self.stdout.write(
-            f'[build_ai_index] Embeddings done — shape {embeddings.shape}, '
-            f'elapsed {elapsed:.1f}s'
+            f'[build_ai_index] Indexed {count} products, elapsed {elapsed:.1f}s'
         )
 
-        # ── 4. Populate vector store ─────────────────────────────────────────
-        store = ProductVectorStore()
-        for p, emb in zip(products, embeddings):
-            cat = p.get('category', '')
-            if isinstance(cat, dict):
-                cat = cat.get('name', '')
-            img_url = p.get('image_url', '')
-            if not img_url:
-                primary_img = p.get('primary_image')
-                if isinstance(primary_img, dict):
-                    img_url = primary_img.get('image', '')
-            store.add(
-                product_id=p['id'],
-                embedding=emb,
-                product_data={
-                    'name': p.get('name', ''),
-                    'price': p.get('price'),
-                    'category': cat,
-                    'brand': p.get('brand', ''),
-                    'description': (p.get('description') or '')[:300],
-                    'image_url': img_url,
-                },
-            )
-
-        self.stdout.write(f'[build_ai_index] Indexed {len(store.product_ids)} products.')
-
-        # ── 5. Persist to disk ───────────────────────────────────────────────
-        ok = store.save_local(index_dir)
+        # ── 3. Persist to disk ───────────────────────────────────────────────
+        ok = vector_store.save(index_dir)
         if not ok:
             raise CommandError(f'Failed to save index to {index_dir}')
 
         self.stdout.write(
             self.style.SUCCESS(
                 f'[build_ai_index] DONE — index saved to {index_dir} '
-                f'({len(store.product_ids)} products, {elapsed:.1f}s embedding time)'
+                f'({count} products, {elapsed:.1f}s total time)'
             )
         )

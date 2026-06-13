@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import Order, OrderItem, OrderStatusHistory
 from .serializers import OrderListSerializer, OrderDetailSerializer, CreateOrderSerializer
+from lib.shared.domain_events import OrderPlaced, OrderStatusChanged, EventBus
 
 logger = logging.getLogger(__name__)
 
@@ -193,6 +194,25 @@ class OrderListCreateView(APIView):
         except Exception as e:
             print(f"Failed to send order notifications: {e}")
 
+        # Publish domain event cho AI services & tracking
+        try:
+            EventBus.publish(OrderPlaced({
+                'order_id': str(order.id),
+                'user_id': str(order.user_id),
+                'total_amount': float(order.total_amount),
+                'status': order.status,
+                'items': [
+                    {
+                        'product_id': item.product_id,
+                        'quantity': item.quantity,
+                        'price': float(item.price),
+                    }
+                    for item in order.items.all()
+                ],
+            }))
+        except Exception as e:
+            print(f"Failed to publish OrderPlaced event: {e}")
+
         return Response(OrderDetailSerializer(order).data, status=status.HTTP_201_CREATED)
 
 
@@ -279,6 +299,7 @@ class OrderStatusUpdateView(APIView):
         if new_status not in valid_statuses:
             return Response({'error': 'Trạng thái không hợp lệ'}, status=status.HTTP_400_BAD_REQUEST)
 
+        old_status = order.status
         order.status = new_status
         order.save()
 
@@ -300,6 +321,17 @@ class OrderStatusUpdateView(APIView):
             )
         except Exception as e:
             print(f"Failed to send order status update notification: {e}")
+
+        # Publish domain event
+        try:
+            EventBus.publish(OrderStatusChanged(
+                order_id=str(order.id),
+                old_status=old_status,
+                new_status=new_status,
+                order_data={'order_id': str(order.id), 'user_id': str(order.user_id)},
+            ))
+        except Exception as e:
+            print(f"Failed to publish OrderStatusChanged event: {e}")
 
         return Response({'message': 'Cập nhật trạng thái thành công', 'order': OrderDetailSerializer(order).data})
 
@@ -344,5 +376,16 @@ class OrderConfirmReceivedView(APIView):
             )
         except Exception as e:
             print(f"Failed to send confirm received notifications: {e}")
+
+        # Publish domain event
+        try:
+            EventBus.publish(OrderStatusChanged(
+                order_id=str(order.id),
+                old_status='delivered',
+                new_status='completed',
+                order_data={'order_id': str(order.id), 'user_id': str(order.user_id)},
+            ))
+        except Exception as e:
+            print(f"Failed to publish OrderStatusChanged event: {e}")
 
         return Response({'message': 'Xác nhận đã nhận hàng thành công', 'order': OrderDetailSerializer(order).data})

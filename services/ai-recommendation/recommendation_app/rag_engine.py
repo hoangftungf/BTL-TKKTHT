@@ -16,18 +16,19 @@ logger = logging.getLogger(__name__)
 
 class EmbeddingModel:
     """
-    Text Embedding Model
-
-    Hỗ trợ nhiều backends:
-    - sentence-transformers (local)
-    - Ollama embeddings
-    - Simple TF-IDF fallback
+    Text Embedding Model — DEPRECATED: use lib.ai_core.embedder.embedder instead.
     """
 
     def __init__(self):
-        self.model = None
-        self.model_type = None
-        self._initialize()
+        import warnings
+        warnings.warn(
+            "EmbeddingModel is deprecated. Use lib.ai_core.embedder.embedder instead.",
+            DeprecationWarning, stacklevel=2,
+        )
+        from lib.ai_core.embedder import embedder as unified
+        self._inner = unified
+        self.model = unified
+        self.model_type = 'ollama'
 
     def _initialize(self):
         """Initialize embedding model"""
@@ -122,9 +123,15 @@ class EmbeddingModel:
 class FAISSIndex:
     """
     FAISS Vector Index cho product embeddings
+    DEPRECATED: use lib.ai_core.vector_store.vector_store instead.
     """
 
     def __init__(self, embedding_dim=384):
+        import warnings
+        warnings.warn(
+            "FAISSIndex is deprecated. Use lib.ai_core.vector_store.vector_store instead.",
+            DeprecationWarning, stacklevel=2,
+        )
         self.embedding_dim = embedding_dim
         self.index = None
         self.product_ids = []
@@ -271,9 +278,13 @@ class RAGEngine:
     1. Retrieval: FAISS vector search
     2. Augmentation: Context building
     3. Generation: LLM response
+
+    NOTE: đang migrate lên lib/ai-core/. Giữ nguyên để backward compat.
     """
 
     def __init__(self):
+        import warnings
+        warnings.warn("RAGEngine is deprecated. Use lib.ai_core components.", DeprecationWarning, stacklevel=2)
         self.embedding_model = EmbeddingModel()
         self.index = FAISSIndex(embedding_dim=self.embedding_model.embedding_dim)
         self.ollama_host = getattr(settings, 'OLLAMA_HOST', os.environ.get('OLLAMA_HOST', 'http://localhost:11434'))

@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import Review, ReviewReply
 from .serializers import ReviewSerializer, ReviewReplySerializer
+from lib.shared.domain_events import ReviewCreated, EventBus
 
 class HealthCheckView(APIView):
     permission_classes = [AllowAny]
@@ -86,6 +87,18 @@ class ReviewListCreateView(APIView):
                 )
             except Exception as e:
                 print(f"Failed to send review notification: {e}")
+
+            # Publish domain event
+            try:
+                EventBus.publish(ReviewCreated({
+                    'review_id': str(serializer.instance.id),
+                    'product_id': str(product_id),
+                    'user_id': str(request.user.id),
+                    'rating': serializer.instance.rating,
+                    'order_id': str(order_id),
+                }))
+            except Exception as e:
+                print(f"Failed to publish ReviewCreated event: {e}")
 
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
