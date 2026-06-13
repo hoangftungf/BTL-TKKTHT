@@ -125,6 +125,23 @@ class CartItemView(APIView):
             elif images:
                 img_url = images[0].get('image', '')
 
+        # Resolve variant-specific price and image
+        item_price = product.get('price', 0)
+        if variant_id:
+            variants = product.get('variants', [])
+            variant = next((v for v in variants if str(v.get('id')) == str(variant_id)), None)
+            if variant:
+                # Use variant price if available
+                item_price = variant.get('price', item_price)
+                
+                # Check if we can find a color-specific image for the variant
+                v_attrs = variant.get('attributes', {})
+                v_color = v_attrs.get('color') or v_attrs.get('Màu sắc') or v_attrs.get('Màu')
+                if v_color and product.get('images'):
+                    color_img = next((img for img in product.get('images', []) if img.get('alt_text') and v_color.lower() in img.get('alt_text').lower()), None)
+                    if color_img:
+                        img_url = color_img.get('image', img_url)
+
         item, created = CartItem.objects.get_or_create(
             cart=cart,
             product_id=product_id,
@@ -132,7 +149,7 @@ class CartItemView(APIView):
             defaults={
                 'product_name': product.get('name', ''),
                 'product_image': img_url,
-                'price': product.get('price', 0),
+                'price': item_price,
                 'quantity': quantity,
             }
         )

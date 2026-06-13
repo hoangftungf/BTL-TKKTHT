@@ -30,6 +30,11 @@ const orderService = {
     const response = await api.put(`/orders/${orderId}/status/`, { status, note });
     return response.data;
   },
+
+  confirmReceived: async (orderId) => {
+    const response = await api.put(`/orders/${orderId}/confirm-received/`);
+    return response.data;
+  },
 };
 
 export default orderService;

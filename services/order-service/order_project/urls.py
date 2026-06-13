@@ -7,6 +7,7 @@ from order_app.views import (
     OrderCancelView,
     OrderTrackView,
     OrderStatusUpdateView,
+    OrderConfirmReceivedView,
 )
 
 urlpatterns = [
@@ -17,4 +18,5 @@ urlpatterns = [
     path('<uuid:pk>/cancel/', OrderCancelView.as_view(), name='order-cancel'),
     path('<uuid:pk>/track/', OrderTrackView.as_view(), name='order-track'),
     path('<uuid:pk>/status/', OrderStatusUpdateView.as_view(), name='order-status-update'),
+    path('<uuid:pk>/confirm-received/', OrderConfirmReceivedView.as_view(), name='order-confirm-received'),
 ]

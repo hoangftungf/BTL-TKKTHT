@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
 import LoginModal from '../auth/LoginModal';
+import CartDrawer from '../cart/CartDrawer';
 
 const MainLayout = () => {
   return (
@@ -12,6 +13,7 @@ const MainLayout = () => {
       </main>
       <Footer />
       <LoginModal />
+      <CartDrawer />
     </div>
   );
 };

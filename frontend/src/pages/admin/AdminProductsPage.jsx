@@ -344,7 +344,7 @@ const AdminProductsPage = () => {
       title: (
         <div className="flex items-center justify-between py-2 px-3 hover:bg-slate-900/30 rounded-xl border border-slate-800/20 my-0.5 transition-all duration-150 w-full group select-none">
           <div className="flex items-center space-x-3 min-w-0">
-            <FolderIcon className="w-4.5 h-4.5 text-indigo-400 flex-shrink-0" />
+            <FolderIcon className="w-5 h-5 text-indigo-400 flex-shrink-0" />
             <span className="font-semibold text-slate-100 truncate text-sm">{cat.name}</span>
             <span className="text-slate-500 text-xs truncate">/{cat.slug}</span>
             <span className="bg-slate-800 text-[10px] text-slate-400 px-2 py-0.5 rounded-full font-medium">
@@ -432,7 +432,7 @@ const AdminProductsPage = () => {
                 placeholder="Tìm kiếm theo tên, SKU..."
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
               />
-              <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
+              <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
             </form>
 
             <div className="flex items-center gap-3 w-full md:w-auto">
@@ -515,7 +515,7 @@ const AdminProductsPage = () => {
                               {product.primary_image ? (
                                 <img src={product.primary_image.image} alt={product.name} className="w-full h-full object-cover" />
                               ) : (
-                                <ShoppingBagIcon className="w-5.5 h-5.5 text-slate-600" />
+                                <ShoppingBagIcon className="w-5 h-5 text-slate-600" />
                               )}
                             </div>
                             <div className="min-w-0">
@@ -866,7 +866,7 @@ const AdminProductsPage = () => {
                       id="is_featured"
                       checked={productForm.is_featured}
                       onChange={(e) => setProductForm(prev => ({ ...prev, is_featured: e.target.checked }))}
-                      className="w-4.5 h-4.5 rounded bg-slate-950 border-slate-800 text-indigo-600 focus:ring-indigo-500"
+                      className="w-4 h-4 rounded bg-slate-950 border-slate-800 text-indigo-600 focus:ring-indigo-500"
                     />
                     <label htmlFor="is_featured" className="text-xs font-bold text-slate-300 uppercase select-none cursor-pointer">Sản phẩm nổi bật (Featured)</label>
                   </div>
@@ -924,7 +924,7 @@ const AdminProductsPage = () => {
                 onClick={() => setIsCategoryModalOpen(false)}
                 className="p-1 rounded-md text-slate-400 hover:text-white focus:outline-none"
               >
-                <XMarkIcon className="w-5.5 h-5.5" />
+                <XMarkIcon className="w-5 h-5" />
               </button>
             </div>
 

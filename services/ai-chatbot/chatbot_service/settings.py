@@ -101,9 +101,20 @@ OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3.2:3b')
 # Product Service URL
 PRODUCT_SERVICE_URL = os.getenv('PRODUCT_SERVICE_URL', 'http://product-service:8000/api/products')
 
+# Review Service URL
+REVIEW_SERVICE_URL = os.getenv('REVIEW_SERVICE_URL', 'http://review-service:8008')
+
 # FAISS index directory — pre-built by 'python manage.py build_ai_index'
 # Mount this path as a Docker volume so the index survives container restarts.
 AI_INDEX_DIR = os.getenv('AI_INDEX_DIR', '/app/ai_index')
+
+# Celery Configuration
+CELERY_BROKER_URL = os.getenv('RABBITMQ_URL', 'amqp://guest:guest@rabbitmq:5672/')
+if not os.getenv('RABBITMQ_URL') and os.getenv('REDIS_URL'):
+    CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://redis:6379/0') + '/4'
+CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://redis:6379/0') + '/4'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
 
 LOGGING = {
     'version': 1,
@@ -118,3 +129,4 @@ LOGGING = {
         'level': 'INFO',
     },
 }
+

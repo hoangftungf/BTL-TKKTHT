@@ -18,9 +18,9 @@ export const fetchCart = createAsyncThunk('cart/fetchCart', async (_, { rejectWi
   }
 });
 
-export const addToCart = createAsyncThunk('cart/addToCart', async ({ productId, quantity = 1 }, { rejectWithValue }) => {
+export const addToCart = createAsyncThunk('cart/addToCart', async ({ productId, quantity = 1, variantId = null }, { rejectWithValue }) => {
   try {
-    const response = await cartService.addItem(productId, quantity);
+    const response = await cartService.addItem(productId, quantity, variantId);
     return response;
   } catch (error) {
     return rejectWithValue(error.response?.data?.message || 'Lỗi thêm vào giỏ');

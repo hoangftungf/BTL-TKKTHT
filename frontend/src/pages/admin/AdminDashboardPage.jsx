@@ -209,7 +209,7 @@ const AdminDashboardPage = () => {
             className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors focus:outline-none"
             title="Tải lại dữ liệu"
           >
-            <ArrowPathIcon className="w-4.5 h-4.5" />
+            <ArrowPathIcon className="w-4 h-4" />
           </button>
         </div>
       </div>

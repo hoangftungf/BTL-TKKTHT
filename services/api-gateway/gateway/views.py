@@ -65,8 +65,12 @@ class BaseProxyView(APIView):
                     headers=headers,
                     content=body,
                 )
+                try:
+                    data = response.json() if response.content else None
+                except ValueError:
+                    data = {'error': response.text or 'Không thể giải mã phản hồi JSON từ microservice'}
                 return Response(
-                    response.json() if response.content else None,
+                    data,
                     status=response.status_code
                 )
         except httpx.ConnectError:

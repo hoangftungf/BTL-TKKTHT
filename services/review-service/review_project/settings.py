@@ -27,3 +27,4 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG
 REST_FRAMEWORK = {'DEFAULT_AUTHENTICATION_CLASSES': ['review_app.authentication.JWTAuthentication'], 'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticatedOrReadOnly']}
 JWT_SECRET = os.environ.get('JWT_SECRET', SECRET_KEY)
 PRODUCT_SERVICE_URL = os.environ.get('PRODUCT_SERVICE_URL', 'http://localhost:8003')
+ORDER_SERVICE_URL = os.environ.get('ORDER_SERVICE_URL', 'http://order-service:8005')

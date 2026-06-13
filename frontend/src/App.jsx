@@ -33,6 +33,7 @@ import AdminProductsPage from './pages/admin/AdminProductsPage';
 import AdminOrdersPage from './pages/admin/AdminOrdersPage';
 import AdminUsersPage from './pages/admin/AdminUsersPage';
 import AdminAIPage from './pages/admin/AdminAIPage';
+import AdminReviewsPage from './pages/admin/AdminReviewsPage';
 
 function App() {
   const dispatch = useDispatch();
@@ -101,6 +102,7 @@ function App() {
           <Route index element={<AdminDashboardPage />} />
           <Route path="products" element={<AdminProductsPage />} />
           <Route path="orders" element={<AdminOrdersPage />} />
+          <Route path="reviews" element={<AdminReviewsPage />} />
           <Route path="users" element={<AdminUsersPage />} />
           <Route path="ai" element={<AdminAIPage />} />
         </Route>

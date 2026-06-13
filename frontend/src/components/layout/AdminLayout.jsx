@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../../store/slices/authSlice';
+import NotificationDropdown from '../notification/NotificationDropdown';
 import {
   HomeIcon,
   ShoppingBagIcon,
@@ -11,8 +12,8 @@ import {
   ArrowLeftIcon,
   Bars3Icon,
   XMarkIcon,
-  BellIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  ChatBubbleLeftRightIcon
 } from '@heroicons/react/24/outline';
 
 const AdminLayout = () => {
@@ -26,6 +27,7 @@ const AdminLayout = () => {
     { name: 'Tổng quan', path: '/admin-dashboard', icon: HomeIcon },
     { name: 'Sản phẩm', path: '/admin-dashboard/products', icon: ShoppingBagIcon },
     { name: 'Đơn hàng', path: '/admin-dashboard/orders', icon: ClipboardDocumentListIcon },
+    { name: 'Đánh giá', path: '/admin-dashboard/reviews', icon: ChatBubbleLeftRightIcon },
     { name: 'Thành viên', path: '/admin-dashboard/users', icon: UsersIcon },
     { name: 'Giám sát AI', path: '/admin-dashboard/ai', icon: CpuChipIcon },
   ];
@@ -152,10 +154,7 @@ const AdminLayout = () => {
           {/* Header Controls */}
           <div className="flex items-center space-x-4">
             {/* Notifications */}
-            <button className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors relative focus:outline-none">
-              <BellIcon className="w-5.5 h-5.5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-indigo-500 rounded-full"></span>
-            </button>
+            <NotificationDropdown theme="dark" />
 
             {/* Profile */}
             <div className="h-8 w-px bg-slate-800"></div>

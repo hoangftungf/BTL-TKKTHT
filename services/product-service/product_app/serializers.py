@@ -32,6 +32,10 @@ class ProductImageSerializer(serializers.ModelSerializer):
         if not obj.image:
             return None
         image_str = str(obj.image)
+        # Normalize single slash to double slash for external urls
+        if image_str.startswith('http:/') or image_str.startswith('https:/'):
+            if not image_str.startswith('http://') and not image_str.startswith('https://'):
+                image_str = image_str.replace(':/', '://', 1)
         if image_str.startswith('http://') or image_str.startswith('https://'):
             return image_str
         request = self.context.get('request')
@@ -51,14 +55,15 @@ class ProductListSerializer(serializers.ModelSerializer):
     primary_image = serializers.SerializerMethodField()
     is_on_sale = serializers.BooleanField(read_only=True)
     discount_percent = serializers.IntegerField(read_only=True)
+    variants = ProductVariantSerializer(many=True, read_only=True)
 
     class Meta:
         model = Product
         fields = [
             'id', 'name', 'slug', 'short_description', 'sku', 'price',
             'compare_price', 'category', 'category_name', 'brand', 'status',
-            'stock_quantity', 'is_featured', 'rating_avg', 'rating_count',
-            'sold_count', 'primary_image', 'is_on_sale', 'discount_percent', 'created_at'
+            'stock_quantity', 'specifications', 'is_featured', 'rating_avg', 'rating_count',
+            'sold_count', 'primary_image', 'variants', 'is_on_sale', 'discount_percent', 'created_at'
         ]
 
     def get_primary_image(self, obj):
@@ -86,7 +91,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'slug', 'description', 'short_description', 'sku',
             'price', 'compare_price', 'cost_price', 'category', 'category_id',
-            'brand', 'status', 'stock_quantity', 'low_stock_threshold', 'weight',
+            'brand', 'status', 'stock_quantity', 'specifications', 'low_stock_threshold', 'weight',
             'is_featured', 'view_count', 'sold_count', 'rating_avg', 'rating_count',
             'seller_id', 'images', 'primary_image', 'variants', 'is_on_sale', 'discount_percent',
             'is_low_stock', 'created_at', 'updated_at'

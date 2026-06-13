@@ -90,13 +90,17 @@ class RecommendationEngine:
             product_id=product_id
         ).order_by('-similarity_score')[:n]
 
-        result = [
-            {
-                'product_id': str(sim.similar_product_id),
-                'similarity_score': sim.similarity_score
-            }
-            for sim in similarities
-        ]
+        if similarities.exists():
+            result = [
+                {
+                    'product_id': str(sim.similar_product_id),
+                    'similarity_score': sim.similarity_score
+                }
+                for sim in similarities
+            ]
+        else:
+            # Fallback: Content-based (Sản phẩm cùng danh mục)
+            result = self._compute_content_based_similar_products(product_id, n)
 
         cache.set(cache_key, result, timeout=3600)
         return result
@@ -197,14 +201,17 @@ class RecommendationEngine:
             )
         ).order_by('-total_score')[:n]
 
-        result = [
-            {
-                'product_id': str(item['product_id']),
-                'score': item['total_score'],
-                'reason': 'Đang thịnh hành'
-            }
-            for item in trending
-        ]
+        if trending.exists():
+            result = [
+                {
+                    'product_id': str(item['product_id']),
+                    'score': item['total_score'],
+                    'reason': 'Đang thịnh hành'
+                }
+                for item in trending
+            ]
+        else:
+            result = self._get_fallback_products(n)
 
         cache.set(cache_key, result, timeout=1800)
         return result
@@ -262,6 +269,73 @@ class RecommendationEngine:
 
         # Invalidate cache
         cache.delete(f'user_recommendations:{user_id}:*')
+
+    def _get_fallback_products(self, n=10):
+        """Lấy các sản phẩm fallback từ Product Service khi hệ thống chưa có tương tác (Cold Start)"""
+        try:
+            # Gọi API lấy sản phẩm nổi bật/mới từ product-service trực tiếp
+            response = httpx.get(
+                f"{settings.PRODUCT_SERVICE_URL}/?page_size={n}",
+                timeout=5.0
+            )
+            if response.status_code == 200:
+                data = response.json()
+                results = data.get('results', [])
+                return [
+                    {
+                        'product_id': str(p['id']),
+                        'score': 1.0,
+                        'reason': 'Gợi ý nổi bật'
+                    }
+                    for p in results
+                ]
+        except Exception as e:
+            logger.error(f"Failed to fetch fallback products: {e}")
+        return []
+
+    def _compute_content_based_similar_products(self, product_id, n=10):
+        """Tính sản phẩm tương tự dựa trên danh mục (Content-Based Fallback)"""
+        try:
+            # 1. Fetch details của sản phẩm hiện tại để lấy category_id
+            response = httpx.get(
+                f"{settings.PRODUCT_SERVICE_URL}/{product_id}/",
+                timeout=5.0
+            )
+            if response.status_code != 200:
+                return self._get_fallback_products(n)
+            
+            product_data = response.json()
+            category_id = product_data.get('category_id') or product_data.get('category', {}).get('id')
+            if not category_id:
+                return self._get_fallback_products(n)
+
+            # 2. Lấy các sản phẩm khác cùng danh mục
+            response_cat = httpx.get(
+                f"{settings.PRODUCT_SERVICE_URL}/category/{category_id}/?page_size={n + 1}",
+                timeout=5.0
+            )
+            if response_cat.status_code == 200:
+                data = response_cat.json()
+                results = data.get('results', [])
+                
+                # Loại trừ chính sản phẩm đang xem
+                filtered_products = [
+                    p for p in results 
+                    if str(p['id']) != str(product_id)
+                ]
+                
+                return [
+                    {
+                        'product_id': str(p['id']),
+                        'similarity_score': 0.8,
+                        'reason': 'Cùng danh mục'
+                    }
+                    for p in filtered_products[:n]
+                ]
+        except Exception as e:
+            logger.error(f"Failed to compute content-based similar products: {e}")
+        
+        return self._get_fallback_products(n)
 
     def train_model(self):
         """Train và lưu similarity matrix"""

@@ -176,6 +176,23 @@ class OrderListCreateView(APIView):
         except Exception:
             pass
 
+        try:
+            from .notification_helper import send_notification, notify_admins
+            send_notification(
+                user_id=order.user_id,
+                type_choice='order',
+                title="Đơn hàng được đặt thành công",
+                message=f"Đơn hàng #{str(order.id)[:8]} của bạn đã được đặt thành công với tổng số tiền {int(order.total_amount):,}đ.",
+                data={'order_id': str(order.id)}
+            )
+            notify_admins(
+                title="Đơn hàng mới được đặt",
+                message=f"Khách hàng {order.recipient_name} vừa đặt đơn hàng mới #{str(order.id)[:8]} tổng trị giá {int(order.total_amount):,}đ.",
+                data={'order_id': str(order.id)}
+            )
+        except Exception as e:
+            print(f"Failed to send order notifications: {e}")
+
         return Response(OrderDetailSerializer(order).data, status=status.HTTP_201_CREATED)
 
 
@@ -253,6 +270,9 @@ class OrderStatusUpdateView(APIView):
             return Response({'error': 'Đơn hàng không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
 
         new_status = request.data.get('status')
+        if new_status == 'completed':
+            return Response({'error': 'Chỉ có khách hàng (người mua) mới được phép xác nhận hoàn thành đơn hàng'}, status=status.HTTP_400_BAD_REQUEST)
+
         note = request.data.get('note', '')
 
         valid_statuses = [choice[0] for choice in Order.STATUS_CHOICES]
@@ -269,4 +289,60 @@ class OrderStatusUpdateView(APIView):
             created_by=request.user.id
         )
 
+        try:
+            from .notification_helper import send_notification
+            send_notification(
+                user_id=order.user_id,
+                type_choice='shipping' if new_status in ['shipping', 'delivered'] else 'order',
+                title="Đơn hàng đã cập nhật trạng thái",
+                message=f"Đơn hàng #{str(order.id)[:8]} của bạn đã được cập nhật sang trạng thái '{order.get_status_display()}'.",
+                data={'order_id': str(order.id), 'status': new_status}
+            )
+        except Exception as e:
+            print(f"Failed to send order status update notification: {e}")
+
         return Response({'message': 'Cập nhật trạng thái thành công', 'order': OrderDetailSerializer(order).data})
+
+
+class OrderConfirmReceivedView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, pk):
+        try:
+            # Only the owner can confirm receipt
+            order = Order.objects.get(pk=pk, user_id=request.user.id)
+        except Order.DoesNotExist:
+            return Response({'error': 'Đơn hàng không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+
+        if order.status not in ['shipping', 'delivered']:
+            return Response({'error': 'Chỉ có thể xác nhận đã nhận hàng khi đơn hàng đang giao hoặc đã giao'}, status=status.HTTP_400_BAD_REQUEST)
+
+        order.status = 'completed'
+        order.payment_status = 'paid'
+        order.save()
+
+        OrderStatusHistory.objects.create(
+            order=order,
+            status='completed',
+            note="Khách hàng xác nhận đã nhận được hàng",
+            created_by=request.user.id
+        )
+
+        try:
+            from .notification_helper import send_notification, notify_admins
+            send_notification(
+                user_id=order.user_id,
+                type_choice='order',
+                title="Đơn hàng đã hoàn thành",
+                message=f"Cảm ơn bạn đã xác nhận nhận hàng! Đơn hàng #{str(order.id)[:8]} đã hoàn thành và thanh toán thành công.",
+                data={'order_id': str(order.id)}
+            )
+            notify_admins(
+                title="Khách hàng đã nhận hàng",
+                message=f"Khách hàng đã xác nhận đã nhận được đơn hàng #{str(order.id)[:8]} và thanh toán thành công.",
+                data={'order_id': str(order.id)}
+            )
+        except Exception as e:
+            print(f"Failed to send confirm received notifications: {e}")
+
+        return Response({'message': 'Xác nhận đã nhận hàng thành công', 'order': OrderDetailSerializer(order).data})

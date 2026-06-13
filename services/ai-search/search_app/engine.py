@@ -10,6 +10,10 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import logging
+from pathlib import Path
+from lib.ai_core.embedder import embedder
+from lib.ai_core.vector_store import vector_store
+from lib.ai_core.acl import ProductACL
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +105,12 @@ HARDCODED_SYNONYMS = {
     'ly giu nhiet': ['binh giu nhiet', 'binh nuoc']
 }
 
+# Reciprocal Rank Fusion (RRF) constants
+RRF_K = 60
+DEFAULT_KEYWORD_WEIGHT = 0.5
+DEFAULT_VECTOR_WEIGHT = 0.5
+VECTOR_INDEX_DIR = 'data/vector_index'
+
 
 class SearchEngine:
     """
@@ -114,6 +124,262 @@ class SearchEngine:
     def __init__(self):
         self.nlp = VietnameseNLP()
         self.tfidf = None
+        self._ensure_vector_index()
+
+    def _ensure_vector_index(self):
+        """Load FAISS index from disk or rebuild from ProductIndex embeddings."""
+        try:
+            if getattr(vector_store, '_initialized', False):
+                return
+            index_dir = self._get_vector_index_dir()
+            loaded = vector_store.load(index_dir)
+            if not loaded:
+                logger.info("No existing vector index found, rebuilding from database")
+                self.rebuild_vector_index()
+            else:
+                logger.info(f"Loaded vector index from {index_dir}")
+        except Exception as e:
+            logger.warning(f"Vector store initialization failed: {e}")
+
+    def _get_vector_index_dir(self):
+        """Get persistent directory for FAISS index files."""
+        from django.conf import settings
+        d = Path(settings.BASE_DIR) / VECTOR_INDEX_DIR
+        d.mkdir(parents=True, exist_ok=True)
+        return str(d)
+
+    def _keyword_search_ranks(self, query, filters=None):
+        """Run keyword search and return {product_id_str: rank} dict (1-based rank)."""
+        from .models import ProductIndex, Synonym
+
+        query_normalized = self.nlp.normalize(query)
+        query_tokens = self.nlp.tokenize(query)
+
+        # Synonym expansion
+        expanded_keywords = {query_normalized}
+        for token in query_tokens:
+            expanded_keywords.add(token)
+
+        # DB synonyms
+        try:
+            db_synonyms = Synonym.objects.filter(
+                Q(word__iexact=query_normalized) | Q(word__in=query_tokens)
+            )
+            for syn_obj in db_synonyms:
+                try:
+                    words_list = json.loads(syn_obj.synonyms)
+                    for w in words_list:
+                        expanded_keywords.add(self.nlp.normalize(w))
+                except Exception:
+                    for w in syn_obj.synonyms.split(','):
+                        expanded_keywords.add(self.nlp.normalize(w.strip()))
+        except Exception as e:
+            logger.error(f"Error loading DB synonyms: {e}")
+
+        # Hardcoded synonyms
+        for kw in list(expanded_keywords):
+            if kw in HARDCODED_SYNONYMS:
+                for syn in HARDCODED_SYNONYMS[kw]:
+                    expanded_keywords.add(self.nlp.normalize(syn))
+
+        # Build keyword query
+        q_objects = Q()
+        q_objects |= Q(name__icontains=query)
+        q_objects |= Q(name_normalized__icontains=query_normalized)
+        for kw in expanded_keywords:
+            q_objects |= Q(name_normalized__icontains=kw)
+            q_objects |= Q(keywords__icontains=kw)
+            q_objects |= Q(brand__icontains=kw)
+            q_objects |= Q(category__icontains=kw)
+
+        queryset = ProductIndex.objects.filter(q_objects)
+
+        # Apply filters
+        if filters:
+            if filters.get('category'):
+                queryset = queryset.filter(category__icontains=filters['category'])
+            if filters.get('brand'):
+                queryset = queryset.filter(brand__icontains=filters['brand'])
+            if filters.get('min_price'):
+                queryset = queryset.filter(price__gte=filters['min_price'])
+            if filters.get('max_price'):
+                queryset = queryset.filter(price__lte=filters['max_price'])
+
+        # Score and rank by popularity
+        queryset = queryset.order_by('-popularity_score')
+
+        ranks = {}
+        for rank, item in enumerate(queryset.values('product_id'), start=1):
+            ranks[str(item['product_id'])] = rank
+
+        return ranks
+
+    def hybrid_search(self, query, filters=None, page=1, page_size=20, mode='hybrid'):
+        """
+        Hybrid search with Reciprocal Rank Fusion (RRF).
+
+        Modes:
+          'keyword' – keyword-only (same as search())
+          'vector'  – semantic-only (FAISS)
+          'hybrid'  – RRF merge of keyword + vector (default)
+        """
+        from .models import ProductIndex
+
+        if not query:
+            return {'results': [], 'total': 0, 'mode': mode}
+
+        query_normalized = self.nlp.normalize(query)
+
+        # Cache key
+        cache_key = f"hybrid:{query_normalized}:{page}:{page_size}:{mode}"
+        if filters:
+            cache_key += f":{hash(str(filters))}"
+
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+
+        keyword_ranks = {}
+        vector_ranks = {}
+
+        # 1. Keyword search
+        if mode in ('keyword', 'hybrid'):
+            keyword_ranks = self._keyword_search_ranks(query, filters)
+
+        # 2. Vector search
+        if mode in ('vector', 'hybrid'):
+            try:
+                embedding = embedder.embed_sync(query)
+                # Map service-level filter names to vector_store filter names
+                vec_filters = None
+                if filters:
+                    vf = {}
+                    if filters.get('category'):
+                        vf['category'] = filters['category']
+                    if filters.get('brand'):
+                        vf['brand'] = filters['brand']
+                    if filters.get('min_price'):
+                        vf['price_min'] = float(filters['min_price'])
+                    if filters.get('max_price'):
+                        vf['price_max'] = float(filters['max_price'])
+                    vec_filters = vf if vf else None
+
+                vec_results = vector_store.search(embedding, k=50, filters=vec_filters)
+                for rank, r in enumerate(vec_results, start=1):
+                    vector_ranks[r['product_id']] = rank
+            except Exception as e:
+                logger.warning(f"Vector search failed, falling back to keyword: {e}")
+
+        # 3. Fuse via RRF
+        all_ids = set(keyword_ranks.keys()) | set(vector_ranks.keys())
+        if not all_ids:
+            response = {'query': query, 'results': [], 'total': 0, 'page': page, 'page_size': page_size, 'mode': mode}
+            cache.set(cache_key, response, timeout=300)
+            return response
+
+        if mode == 'hybrid':
+            scores = {}
+            for pid in all_ids:
+                score = 0.0
+                if pid in keyword_ranks:
+                    score += DEFAULT_KEYWORD_WEIGHT / (RRF_K + keyword_ranks[pid])
+                if pid in vector_ranks:
+                    score += DEFAULT_VECTOR_WEIGHT / (RRF_K + vector_ranks[pid])
+                scores[pid] = score
+        elif mode == 'keyword':
+            scores = {pid: 1.0 / (RRF_K + rank) for pid, rank in keyword_ranks.items()}
+        elif mode == 'vector':
+            scores = {pid: 1.0 / (RRF_K + rank) for pid, rank in vector_ranks.items()}
+        else:
+            scores = keyword_ranks  # fallback
+
+        ranked_ids = sorted(scores.keys(), key=lambda pid: scores[pid], reverse=True)
+
+        total = len(ranked_ids)
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_ids = ranked_ids[start:end]
+
+        # Fetch results preserving RRF rank order
+        results = []
+        if page_ids:
+            product_map = {str(p.product_id): p for p in ProductIndex.objects.filter(product_id__in=page_ids)}
+            for pid in page_ids:
+                p = product_map.get(pid)
+                if p:
+                    results.append({
+                        'product_id': str(p.product_id),
+                        'name': p.name,
+                        'name_normalized': p.name_normalized,
+                        'description': p.description,
+                        'category': p.category,
+                        'brand': p.brand,
+                        'price': float(p.price),
+                        'keywords': p.keywords,
+                        'popularity_score': p.popularity_score,
+                        '_score': float(scores[pid]),
+                    })
+
+        # Record search history
+        self._record_search(query, query_normalized, total)
+
+        response = {
+            'query': query,
+            'results': results,
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'mode': mode,
+        }
+
+        cache.set(cache_key, response, timeout=300)
+        return response
+
+    def rebuild_vector_index(self):
+        """Rebuild FAISS vector index from ProductIndex.embedding (PostgreSQL authoritative source)."""
+        from .models import ProductIndex
+
+        # Reset vector store state (handle both FAISS and numpy fallback)
+        try:
+            vector_store.reset()
+        except Exception:
+            # FAISS not available — use numpy fallback
+            vector_store.index = None
+            vector_store.product_ids = []
+            vector_store.product_data = {}
+            vector_store._embeddings_fallback = []
+            vector_store._initialized = True
+
+        count = 0
+        for idx in ProductIndex.objects.exclude(embedding__isnull=True).iterator(chunk_size=100):
+            try:
+                emb_bytes = bytes(idx.embedding)
+                embedding = np.frombuffer(emb_bytes, dtype=np.float32)
+                if embedding.size == 768:
+                    vector_store.add(
+                        product_id=str(idx.product_id),
+                        embedding=embedding,
+                        data={
+                            'name': idx.name,
+                            'category': idx.category,
+                            'brand': idx.brand,
+                            'price': float(idx.price),
+                        },
+                    )
+                    count += 1
+            except Exception as e:
+                logger.warning(f"Failed to rebuild index for {idx.product_id}: {e}")
+
+        # Persist to disk
+        try:
+            index_dir = self._get_vector_index_dir()
+            vector_store.save(index_dir)
+            logger.info(f"Saved vector index ({count} products) to {index_dir}")
+        except Exception as e:
+            logger.warning(f"Failed to save vector index: {e}")
+
+        logger.info(f"Rebuilt vector index with {count} products")
+        return count
 
     def search(self, query, filters=None, page=1, page_size=20):
         """
@@ -322,7 +588,7 @@ class SearchEngine:
             logger.error(f"Error recording search: {e}")
 
     def index_product(self, product_data):
-        """Index một sản phẩm"""
+        """Index một sản phẩm (keyword + embedding + FAISS)"""
         from .models import ProductIndex
 
         name = product_data.get('name', '')
@@ -339,7 +605,7 @@ class SearchEngine:
         else:
             category = product_data.get('category_name', str(category))
 
-        ProductIndex.objects.update_or_create(
+        index_obj, created = ProductIndex.objects.update_or_create(
             product_id=product_data['id'],
             defaults={
                 'name': name,
@@ -349,9 +615,29 @@ class SearchEngine:
                 'brand': product_data.get('brand', ''),
                 'price': float(product_data.get('price', 0) or 0),
                 'keywords': keywords,
-                'popularity_score': float(product_data.get('sold_count', 0) or 0) * 0.5 + float(product_data.get('view_count', 0) or 0) * 0.1
+                'popularity_score': float(product_data.get('sold_count', 0) or 0) * 0.5 + float(product_data.get('view_count', 0) or 0) * 0.1,
             }
         )
+
+        # Generate and store embedding (silent fail)
+        try:
+            normalized = ProductACL.from_api_response(product_data)
+            embed_text = ProductACL.to_embedding_text(normalized)
+            embedding = embedder.embed_sync(embed_text)
+
+            if embedding is not None and embedding.size > 0:
+                emb_1d = embedding[0] if embedding.ndim > 1 else embedding
+                ProductIndex.objects.filter(product_id=product_data['id']).update(
+                    embedding=emb_1d.astype(np.float32).tobytes()
+                )
+                vector_store.add(
+                    product_id=str(product_data['id']),
+                    embedding=emb_1d,
+                    data=normalized,
+                )
+                logger.debug(f"Generated embedding for product {product_data['id']}")
+        except Exception as e:
+            logger.warning(f"Embedding generation failed for product {product_data.get('id')}: {e}")
 
     def reindex_all(self):
         """Reindex tất cả sản phẩm từ Product Service"""

@@ -16,4 +16,4 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "--threads", "4", "--timeout", "300", "chatbot_service.wsgi:application"]
+CMD ["uvicorn", "chatbot_service.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--workers", "3"]

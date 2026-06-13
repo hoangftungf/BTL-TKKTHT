@@ -252,7 +252,7 @@ class HybridRecommendationsView(APIView):
         products = {}
         for pid in product_ids:
             try:
-                response = httpx.get(f"{settings.PRODUCT_SERVICE_URL}/api/products/{pid}/", timeout=5.0)
+                response = httpx.get(f"{settings.PRODUCT_SERVICE_URL}/{pid}/", timeout=5.0)
                 if response.status_code == 200:
                     products[pid] = response.json()
             except Exception:

@@ -423,7 +423,7 @@ class KnowledgeGraphEngine:
             # Sync products from product service
             product_service_url = getattr(settings, 'PRODUCT_SERVICE_URL', 'http://localhost:8003')
             try:
-                response = httpx.get(f"{product_service_url}/api/products/?page_size=1000", timeout=30.0)
+                response = httpx.get(f"{product_service_url}/?page_size=1000", timeout=30.0)
                 if response.status_code == 200:
                     products = response.json().get('results', [])
                     for p in products:

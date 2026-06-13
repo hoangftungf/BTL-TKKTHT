@@ -193,7 +193,7 @@ const AdminAIPage = () => {
           onClick={loadAIData}
           className="flex items-center space-x-2 bg-slate-900 border border-slate-800 text-slate-300 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wider uppercase hover:text-white hover:bg-slate-850 focus:outline-none"
         >
-          <ArrowPathIcon className="w-4.5 h-4.5" />
+          <ArrowPathIcon className="w-4 h-4" />
           <span>Tải lại</span>
         </button>
       </div>
@@ -291,14 +291,14 @@ const AdminAIPage = () => {
               onClick={handleSyncGraph}
               className="w-full flex items-center justify-center space-x-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs tracking-wider uppercase py-3 rounded-xl transition-all shadow-md focus:outline-none"
             >
-              <ArrowPathIcon className="w-4.5 h-4.5" />
+              <ArrowPathIcon className="w-4 h-4" />
               <span>Đồng bộ đồ thị Neo4j</span>
             </button>
             <button
               onClick={handleTrainModels}
               className="w-full flex items-center justify-center space-x-2.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 hover:text-white text-slate-300 font-semibold text-xs tracking-wider uppercase py-3 rounded-xl transition-all focus:outline-none"
             >
-              <PlayIcon className="w-4.5 h-4.5 text-indigo-400" />
+              <PlayIcon className="w-4 h-4 text-indigo-400" />
               <span>Re-train Models AI</span>
             </button>
           </div>
@@ -395,7 +395,7 @@ const AdminAIPage = () => {
                 onClick={() => setIsDrawerOpen(false)}
                 className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-900 transition-colors focus:outline-none"
               >
-                <XMarkIcon className="w-5.5 h-5.5" />
+                <XMarkIcon className="w-5 h-5" />
               </button>
             </div>
 

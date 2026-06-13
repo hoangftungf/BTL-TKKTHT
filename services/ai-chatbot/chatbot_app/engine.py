@@ -24,6 +24,113 @@ def deterministic_hash(val: str) -> str:
     return hashlib.md5(val.encode('utf-8')).hexdigest()
 
 
+# ===================== REDIS SEMANTIC CACHE & GUARDRAILS =====================
+
+class RedisSemanticCache:
+    def __init__(self, embedder, threshold=0.92):
+        self.embedder = embedder
+        self.threshold = threshold
+        
+    def get(self, query):
+        cache_data = cache.get("semantic_cache_data", [])
+        if not cache_data:
+            return None
+            
+        try:
+            query_embs = self.embedder.embed(query)
+            if len(query_embs) == 0:
+                return None
+            q_emb = np.array(query_embs[0])
+            
+            best_sim = -1.0
+            best_entry = None
+            
+            q_norm = q_emb / np.linalg.norm(q_emb)
+            for entry in cache_data:
+                q, emb_list = entry[0], entry[1]
+                emb = np.array(emb_list)
+                emb_norm = emb / np.linalg.norm(emb)
+                sim = np.dot(emb_norm, q_norm)
+                if sim > best_sim:
+                    best_sim = sim
+                    best_entry = entry
+                    
+            if best_sim >= self.threshold:
+                logger.info(f"[SemanticCache] Redis Hit! Similarity: {best_sim:.2f}")
+                if len(best_entry) >= 5:
+                    return best_entry[2], best_entry[3], best_entry[4]
+                elif len(best_entry) == 4:
+                    return best_entry[2], best_entry[3], []
+                else:
+                    return best_entry[2], 'product_search', []
+        except Exception as e:
+            logger.error(f"[SemanticCache] Error: {e}")
+        return None
+        
+    def set(self, query, response, intent='product_search', products=None):
+        try:
+            query_embs = self.embedder.embed(query)
+            if len(query_embs) == 0:
+                return
+            
+            cache_data = cache.get("semantic_cache_data", [])
+            if len(cache_data) >= 200:
+                cache_data.pop(0)
+                
+            cache_data.append((query, list(query_embs[0]), response, intent, products or []))
+            cache.set("semantic_cache_data", cache_data, timeout=86400) # cache for 1 day
+        except Exception as e:
+            logger.error(f"[SemanticCache] Set error: {e}")
+
+
+COMPETITOR_BRANDS = ["samsung", "apple", "nike", "adidas", "sony", "dell", "hp", "lenovo", "asus", "xiaomi"]
+
+def apply_output_guardrails(response: str, query: str, context_products: list) -> str:
+    """
+    Guardrails to prevent hallucinations, competitor mentions, and ensure citation.
+    """
+    if not response:
+        return response
+        
+    response_lower = response.lower()
+    
+    # Check if AI mentioned a competitor brand not in allowed_brands
+    allowed_brands = set()
+    if context_products:
+        for p in context_products:
+            # Handle list/dict item structure
+            data = p.get('data') or p
+            brand = data.get('brand')
+            if brand:
+                allowed_brands.add(brand.lower())
+                
+    query_lower = query.lower()
+    for b in COMPETITOR_BRANDS:
+        if b in query_lower:
+            allowed_brands.add(b)
+            
+    for brand in COMPETITOR_BRANDS:
+        if brand in response_lower and brand not in allowed_brands:
+            logger.warning(f"[Guardrails] Blocked response containing unauthorized competitor brand: {brand}")
+            return "Tôi không tìm thấy sản phẩm phù hợp với yêu cầu của bạn hoặc sản phẩm thương hiệu này không khả dụng."
+            
+    return response
+
+
+RAG_SYSTEM_PROMPT = """Bạn là trợ lý AI của cửa hàng thương mại điện tử.
+Chỉ sử dụng thông tin trong CONTEXT dưới đây để trả lời.
+Nếu không có sản phẩm phù hợp trong context, hãy trả lời "Tôi không tìm thấy sản phẩm phù hợp".
+Mỗi sản phẩm được đề cập PHẢI đi kèm mã theo định dạng [ID: xxx]. Không được tự bịa thông tin.
+
+CONTEXT SẢN PHẨM:
+{context}
+{kg_info}
+
+CÂU HỎI: {query}
+
+TRẢ LỜI (ngắn gọn, tối đa 3 câu, chỉ dựa trên context):"""
+
+
 # ===================== INTENT & ENTITY EXTRACTION =====================
 
 @dataclass
@@ -117,6 +224,33 @@ class QueryParser:
         'nike': ['nike', 'air jordan', 'air force'],
         'adidas': ['adidas', 'yeezy'],
         'sony': ['sony', 'playstation', 'ps5'],
+        'msi': ['msi'],
+    }
+
+    # Color patterns (Vietnamese and English)
+    COLOR_PATTERNS = {
+        'Đen': ['đen', 'black', 'dark', 'den'],
+        'Trắng': ['trắng', 'white', 'light', 'trang'],
+        'Hồng': ['hồng', 'pink', 'hong'],
+        'Đỏ': ['đỏ', 'red', 'do'],
+        'Xanh': ['xanh', 'blue', 'green'],
+        'Vàng': ['vàng', 'yellow', 'vang'],
+        'Nâu': ['nâu', 'brown', 'nau'],
+        'Xám': ['xám', 'grey', 'gray', 'xam'],
+        'Cam': ['cam', 'orange'],
+        'Tím': ['tím', 'purple', 'tim']
+    }
+
+    # Material patterns
+    MATERIAL_PATTERNS = {
+        'Jean': ['jean', 'bò', 'denim', 'bo'],
+        'Cotton': ['cotton', 'thun'],
+        'Lụa': ['lụa', 'silk', 'lua'],
+        'Da': ['da', 'leather', 'da bò', 'da thật'],
+        'Len': ['len', 'wool'],
+        'Polyester': ['polyester', 'poly', 'nỉ', 'spandex', 'ni'],
+        'Kaki': ['kaki', 'khaki'],
+        'Linen': ['linen', 'đũi', 'dui']
     }
 
     # Price patterns (Vietnamese - both diacritics and non-diacritics)
@@ -148,6 +282,8 @@ class QueryParser:
     }
 
     def __init__(self):
+        self.BRAND_PATTERNS = dict(self.BRAND_PATTERNS)
+        self._dynamic_brands_loaded = False
         self._compile_patterns()
 
     def _compile_patterns(self):
@@ -162,6 +298,16 @@ class QueryParser:
             pattern = r'\b(' + '|'.join(re.escape(kw) for kw in keywords) + r')\b'
             self._brand_regex[brand] = re.compile(pattern, re.IGNORECASE)
 
+        self._color_regex = {}
+        for color, keywords in self.COLOR_PATTERNS.items():
+            pattern = r'\b(' + '|'.join(re.escape(kw) for kw in keywords) + r')\b'
+            self._color_regex[color] = re.compile(pattern, re.IGNORECASE)
+
+        self._material_regex = {}
+        for material, keywords in self.MATERIAL_PATTERNS.items():
+            pattern = r'\b(' + '|'.join(re.escape(kw) for kw in keywords) + r')\b'
+            self._material_regex[material] = re.compile(pattern, re.IGNORECASE)
+
     def parse(self, query: str) -> ExtractedEntities:
         """
         Parse user query and extract structured entities.
@@ -170,6 +316,7 @@ class QueryParser:
             "tư vấn laptop giá 20 triệu" ->
             ExtractedEntities(category="laptop", price_max=20000000)
         """
+        self._load_dynamic_brands()
         entities = ExtractedEntities(raw_query=query)
         query_lower = query.lower()
 
@@ -182,14 +329,69 @@ class QueryParser:
         # 3. Extract price constraints
         self._extract_price(query_lower, entities)
 
-        # 4. Calculate confidence
+        # 4. Extract color and material
+        color = self._extract_color(query_lower)
+        if color:
+            entities.attributes['color'] = color
+        material = self._extract_material(query_lower)
+        if material:
+            entities.attributes['material'] = material
+
+        # Extract RAM/SSD/Size attributes
+        ram_match = re.search(r'\b(\d+)\s*(?:gb|g)\s*(?:ram)\b|\b(8|16|32|64)\s*(?:gb|g)\b', query_lower)
+        if ram_match:
+            ram_val = ram_match.group(1) or ram_match.group(2)
+            entities.attributes['ram'] = f"{ram_val}GB"
+
+        ssd_match = re.search(r'\b(256|512)\s*(?:gb|g)\s*(?:ssd)?\b|\b(1|2)\s*(?:tb|t)\s*(?:ssd)?\b', query_lower)
+        if ssd_match:
+            ssd_val = ssd_match.group(1) or (ssd_match.group(2) + "TB")
+            if not ssd_val.endswith("TB"):
+                ssd_val = f"{ssd_val}GB"
+            entities.attributes['ssd'] = ssd_val
+
+        size_match = re.search(r'\b(?:size|cỡ|co)\s*(\d+|l|m|s|xl|xxl)\b', query_lower)
+        if size_match:
+            entities.attributes['size'] = size_match.group(1).upper()
+
+        # 5. Calculate confidence
         entities.confidence = self._calculate_confidence(entities)
 
         logger.info(f"Parsed query '{query}' -> category={entities.category}, "
                     f"price_max={entities.price_max}, price_min={entities.price_min}, "
-                    f"brand={entities.brand}, confidence={entities.confidence:.2f}")
+                    f"brand={entities.brand}, color={color}, material={material}, "
+                    f"confidence={entities.confidence:.2f}")
 
         return entities
+
+    def _load_dynamic_brands(self):
+        """Fetch all brands dynamically from Neo4j and compile regex patterns"""
+        if self._dynamic_brands_loaded:
+            return
+            
+        try:
+            global kg_client
+            if kg_client:
+                session = kg_client._get_session()
+                if session:
+                    with session:
+                        result = session.run("MATCH (b:Brand) RETURN b.name AS name")
+                        db_brands = [r['name'] for r in result if r['name']]
+                    
+                    for brand in db_brands:
+                        brand_lower = brand.lower()
+                        if brand_lower not in self.BRAND_PATTERNS:
+                            self.BRAND_PATTERNS[brand_lower] = [brand_lower]
+                            
+                    # Re-compile brand patterns
+                    for brand, keywords in self.BRAND_PATTERNS.items():
+                        pattern = r'\b(' + '|'.join(re.escape(kw) for kw in keywords) + r')\b'
+                        self._brand_regex[brand] = re.compile(pattern, re.IGNORECASE)
+                        
+                    self._dynamic_brands_loaded = True
+                    logger.info(f"[QueryParser] Successfully loaded {len(db_brands)} brands dynamically from Neo4j.")
+        except Exception as e:
+            logger.warning(f"[QueryParser] Failed to load dynamic brands: {e}")
 
     def _extract_category(self, query: str) -> Optional[str]:
         """Extract product category from query"""
@@ -204,6 +406,21 @@ class QueryParser:
             if regex.search(query):
                 return brand
         return None
+
+    def _extract_color(self, query: str) -> Optional[str]:
+        """Extract color from query"""
+        for color, regex in self._color_regex.items():
+            if regex.search(query):
+                return color
+        return None
+
+    def _extract_material(self, query: str) -> Optional[str]:
+        """Extract material from query"""
+        for material, regex in self._material_regex.items():
+            if regex.search(query):
+                return material
+        return None
+
 
     def _extract_price(self, query: str, entities: ExtractedEntities) -> None:
         """Extract price constraints from query"""
@@ -358,7 +575,7 @@ class ProductVectorStore:
             self.product_data[str(product_id)] = product_data
 
     def search(self, query_embedding, k=5):
-        """Search for similar products"""
+        """Search for similar products with status and stock filters"""
         self._initialize()
 
         if len(self.product_ids) == 0:
@@ -370,35 +587,59 @@ class ProductVectorStore:
             query_embedding = query_embedding / norm
 
         if len(query_embedding.shape) == 1:
+            query_embedding = query_embedding / norm
             query_embedding = query_embedding.reshape(1, -1)
+
+        # Retrieve a larger pool of candidates to allow filtering of out-of-stock items
+        candidate_k = min(k * 3, len(self.product_ids))
 
         if self.index is not None:
             import faiss
-            distances, indices = self.index.search(query_embedding, min(k, len(self.product_ids)))
+            distances, indices = self.index.search(query_embedding, candidate_k)
             results = []
             for i, idx in enumerate(indices[0]):
                 if idx >= 0 and idx < len(self.product_ids):
                     product_id = self.product_ids[idx]
+                    p_data = self.product_data.get(product_id, {})
+                    
+                    # Status & Stock Check (Giai đoạn 3.1)
+                    if p_data.get('status', 'active') not in ['active', None]:
+                        continue
+                    if p_data.get('stock_quantity') is not None and p_data.get('stock_quantity') <= 0:
+                        continue
+                        
                     results.append({
                         'product_id': product_id,
                         'score': float(distances[0][i]),
-                        'data': self.product_data.get(product_id, {})
+                        'data': p_data
                     })
+                    if len(results) >= k:
+                        break
             return results
         else:
             if not hasattr(self, '_embeddings') or len(self._embeddings) == 0:
                 return []
             embeddings = np.array(self._embeddings)
             scores = np.dot(embeddings, query_embedding.T).flatten()
-            top_indices = np.argsort(scores)[::-1][:k]
+            top_indices = np.argsort(scores)[::-1][:candidate_k]
             results = []
             for idx in top_indices:
                 product_id = self.product_ids[idx]
+                p_data = self.product_data.get(product_id, {})
+                
+                # Status & Stock Check (Giai đoạn 3.1)
+                if p_data.get('status', 'active') not in ['active', None]:
+                    continue
+                if p_data.get('stock_quantity') is not None and p_data.get('stock_quantity') <= 0:
+                    continue
+                    
                 results.append({
                     'product_id': product_id,
                     'score': float(scores[idx]),
-                    'data': self.product_data.get(product_id, {})
+                    'data': p_data
                 })
+                if len(results) >= k:
+                    break
             return results
 
     def save_local(self, directory: str) -> bool:
@@ -606,6 +847,7 @@ class KnowledgeGraphClient:
                     MATCH (p:Product)-[:BELONGS_TO]->(c)
                     OPTIONAL MATCH (:User)-[r:PURCHASED]->(p)
                     WITH p, c, COUNT(r) AS purchases
+                    WITH p, c, purchases
                     RETURN p.id AS product_id, p.name AS name, p.price AS price,
                            c.name AS category, purchases
                     ORDER BY purchases DESC
@@ -622,21 +864,12 @@ class KnowledgeGraphClient:
         except Exception as e:
             logger.error(f"Error searching by category: {e}")
             return []
-
     def search_products_structured(self, entities: 'ExtractedEntities', n=5) -> List[Dict]:
         """
         Search products using structured entities from QueryParser.
         Builds dynamic Cypher query based on extracted entities.
 
-        STRICT MATCHING: Only returns products that match category AND price constraints.
-        NO FALLBACK to random/trending products.
-
-        Args:
-            entities: ExtractedEntities from QueryParser.parse()
-            n: Number of results to return
-
-        Returns:
-            List of products matching the structured query
+        STRICT MATCHING: Only returns active, in-stock products that match category, brand, price, color, and material.
         """
         session = self._get_session()
         if not session:
@@ -645,65 +878,98 @@ class KnowledgeGraphClient:
 
         try:
             with session:
-                # Build dynamic Cypher query with STRICT category matching
-                where_clauses = []
+                # Build dynamic Cypher query
+                where_clauses = [
+                    "(p.status IS NULL OR p.status = 'active')",
+                    "(p.stock_quantity IS NULL OR p.stock_quantity > 0)"
+                ]
                 params = {"limit": n}
+                matches = ["MATCH (p:Product)"]
 
-                # STRICT Category filter - must match category
+                # STRICT Category filter
                 if entities.category:
-                    # Use MATCH to require category relationship
-                    query_start = """
-                        MATCH (p:Product)-[:BELONGS_TO]->(c:Category)
-                        WHERE toLower(c.name) CONTAINS toLower($category)
-                    """
+                    matches.append("MATCH (p)-[:BELONGS_TO]->(c:Category)")
+                    where_clauses.append("toLower(c.name) CONTAINS toLower($category)")
                     params["category"] = entities.category
-                    logger.info(f"[DEBUG] Neo4j category filter: {entities.category}")
                 else:
-                    # No category specified - match all products
-                    query_start = """
-                        MATCH (p:Product)
-                        OPTIONAL MATCH (p)-[:BELONGS_TO]->(c:Category)
-                        WHERE 1=1
-                    """
+                    matches.append("OPTIONAL MATCH (p)-[:BELONGS_TO]->(c:Category)")
 
                 # Brand filter
                 if entities.brand:
+                    matches.append("OPTIONAL MATCH (p)-[:MADE_BY]->(b:Brand)")
                     where_clauses.append(
                         "(toLower(p.name) CONTAINS toLower($brand) OR "
-                        "toLower(coalesce(p.brand, '')) CONTAINS toLower($brand))"
+                        "toLower(coalesce(p.brand, '')) CONTAINS toLower($brand) OR "
+                        "toLower(coalesce(b.name, '')) CONTAINS toLower($brand))"
                     )
                     params["brand"] = entities.brand
-                    logger.info(f"[DEBUG] Neo4j brand filter: {entities.brand}")
 
-                # STRICT Price filters (use toInteger since price is stored as string in Neo4j)
+                # Color filter
+                color_val = entities.attributes.get('color')
+                if color_val:
+                    matches.append("MATCH (p)-[:HAS_COLOR]->(co:Color)")
+                    where_clauses.append("toLower(co.name) = toLower($color)")
+                    params["color"] = color_val
+
+                # Material filter
+                material_val = entities.attributes.get('material')
+                if material_val:
+                    matches.append("MATCH (p)-[:HAS_MATERIAL]->(ma:Material)")
+                    where_clauses.append("toLower(ma.name) = toLower($material)")
+                    params["material"] = material_val
+
+                # Variant filters (RAM, SSD, Size)
+                ram_val = entities.attributes.get('ram')
+                ssd_val = entities.attributes.get('ssd')
+                size_val = entities.attributes.get('size')
+                if ram_val or ssd_val or size_val:
+                    matches.append("MATCH (p)-[:HAS_VARIANT]->(v:Variant)")
+                    if ram_val:
+                        where_clauses.append("(toLower(v.name) CONTAINS toLower($ram) OR toLower(coalesce(v.attributes.ram, '')) = toLower($ram))")
+                        params["ram"] = ram_val
+                    if ssd_val:
+                        where_clauses.append("(toLower(v.name) CONTAINS toLower($ssd) OR toLower(coalesce(v.attributes.ssd, '')) = toLower($ssd) OR toLower(coalesce(v.attributes.storage, '')) = toLower($ssd))")
+                        params["ssd"] = ssd_val
+                    if size_val:
+                        where_clauses.append("(toLower(coalesce(v.attributes.size, '')) = toLower($size) OR toLower(v.name) CONTAINS toLower($size))")
+                        params["size"] = size_val
+
+                # STRICT Price filters
                 if entities.price_max:
                     where_clauses.append("toInteger(p.price) <= $price_max")
                     params["price_max"] = entities.price_max
-                    logger.info(f"[DEBUG] Neo4j price_max filter: {entities.price_max}")
 
                 if entities.price_min:
                     where_clauses.append("toInteger(p.price) >= $price_min")
                     params["price_min"] = entities.price_min
-                    logger.info(f"[DEBUG] Neo4j price_min filter: {entities.price_min}")
 
-                # Build WHERE clause for additional filters
-                additional_where = ""
-                if where_clauses:
-                    additional_where = " AND " + " AND ".join(where_clauses)
+                with_vars = ["p", "c"]
+                if entities.brand:
+                    with_vars.append("b")
+                if color_val:
+                    with_vars.append("co")
+                if material_val:
+                    with_vars.append("ma")
+                if ram_val or ssd_val or size_val:
+                    with_vars.append("v")
+                with_clause = "WITH " + ", ".join(with_vars)
 
-                # Complete query with scoring
+                match_clause = "\n                    ".join(matches)
+                where_clause = "WHERE " + " AND ".join(where_clauses)
+
                 cypher_query = f"""
-                    {query_start}
-                    {additional_where}
+                    {match_clause}
+                    {with_clause}
+                    {where_clause}
                     OPTIONAL MATCH (:User)-[r:PURCHASED|VIEWED|CLICKED]->(p)
-                    WITH p, c, COUNT(r) AS popularity
+                    WITH p, coalesce(c.name, '') AS category_name, COUNT(r) AS popularity
                     RETURN p.id AS product_id,
                            p.name AS name,
                            p.price AS price,
                            coalesce(p.brand, '') AS brand,
                            coalesce(p.description, '') AS description,
                            coalesce(p.image_url, '') AS image_url,
-                           coalesce(c.name, '') AS category,
+                           category_name AS category,
                            popularity
                     ORDER BY popularity DESC, p.price ASC
                     LIMIT $limit
@@ -729,7 +995,7 @@ class KnowledgeGraphClient:
                     })
 
                 logger.info(f"[DEBUG] Structured search found {len(products)} products: "
-                           f"{[p['name'] for p in products[:3]]}")
+                            f"{[p['name'] for p in products[:3]]}")
                 return products
 
         except Exception as e:
@@ -794,11 +1060,21 @@ class RAGPipeline:
         self.embedder = TextEmbedder(ollama_host)
         self.vector_store = ProductVectorStore()
         self._indexed = False
-        # Load pre-built FAISS index at startup (disk read ≪ embedding rebuild time).
-        # Populated by: python manage.py build_ai_index
-        index_dir = getattr(settings, 'AI_INDEX_DIR', '/app/ai_index')
-        if self.vector_store.load_local(index_dir):
+        self.index_dir = getattr(settings, 'AI_INDEX_DIR', '/app/ai_index')
+        
+        # Load local index if exists
+        meta_path = os.path.join(self.index_dir, 'meta.json')
+        if self.vector_store.load_local(self.index_dir):
             self._indexed = True
+            if os.path.exists(meta_path):
+                self._last_loaded_mtime = os.path.getmtime(meta_path)
+            else:
+                self._last_loaded_mtime = 0
+        else:
+            self._last_loaded_mtime = 0
+
+        # Initialize Redis-backed Semantic Cache
+        self.semantic_cache = RedisSemanticCache(self.embedder)
 
     def index_products(self, force: bool = False):
         """
@@ -845,16 +1121,17 @@ class RAGPipeline:
 
         Strategy:
         - Fields are separated by ' | ' so the embedding model sees clear boundaries.
-        - description is chunked to the first 300 words to prevent token overflow
-          and noisy embeddings from very long marketing copy.
-        - Structured header (name + brand + category) always appears first so it
-          has the highest influence on the final embedding.
+        - Includes brand, category, color, material, and description.
+        - description is chunked to the first 300 words to prevent token overflow.
         """
         name = product.get('name', '')
         brand = product.get('brand', '')
         cat = product.get('category', '')
         if isinstance(cat, dict):
             cat = cat.get('name', '')
+            
+        color = product.get('color', '')
+        material = product.get('material', '')
 
         description = (
             product.get('description') or product.get('short_description') or ''
@@ -865,7 +1142,46 @@ class RAGPipeline:
         if len(desc_words) > 300:
             description = ' '.join(desc_words[:300])
 
-        parts = [p for p in [name, brand, cat, description] if p]
+        parts = []
+        if name:
+            parts.append(name)
+        if brand:
+            parts.append(brand)
+        if cat:
+            parts.append(cat)
+        if color:
+            parts.append(f"Màu: {color}")
+        if material:
+            parts.append(f"Chất liệu: {material}")
+        if description:
+            parts.append(description)
+
+        # Include specifications in embedding text
+        specs = product.get('specifications')
+        if specs and isinstance(specs, dict):
+            spec_parts = [f"{k}: {v}" for k, v in specs.items()]
+            if spec_parts:
+                parts.append(f"Thông số kỹ thuật: {', '.join(spec_parts)}")
+        elif specs and isinstance(specs, str) and specs.strip():
+            parts.append(f"Thông số kỹ thuật: {specs}")
+
+        # Include variants in embedding text
+        variants = product.get('variants')
+        if variants and isinstance(variants, list):
+            var_parts = []
+            for v in variants:
+                v_name = v.get('name', '')
+                v_price = v.get('price')
+                v_stock = v.get('stock_quantity')
+                try:
+                    price_str = f"{float(v_price):,.0f}đ" if v_price is not None else "Liên hệ"
+                except (ValueError, TypeError):
+                    price_str = "Liên hệ"
+                stock_str = f"Còn {v_stock}" if v_stock is not None else "Còn hàng"
+                var_parts.append(f"[{v_name} - Giá: {price_str} - {stock_str}]")
+            if var_parts:
+                parts.append(f"Các biến thể: {', '.join(var_parts)}")
+
         return ' | '.join(parts)
 
     def _merge_hybrid(
@@ -931,18 +1247,17 @@ class RAGPipeline:
     def retrieve(self, query, k=5, user_id=None):
         """
         Hybrid Retrieval: KG Structured Search + FAISS Vector Search.
-
-        Does NOT call index_products() inline — the blocking cold-start is
-        eliminated. Pre-build the index with:
-            python manage.py build_ai_index
-
-        Pipeline:
-          1. Parse query → structured entities (category, price, brand)
-          2. KG structured search  — high precision, explicit filters
-          3. FAISS vector search   — high recall, semantic similarity
-          4. Score threshold: discard vector hits with score <= 0.5
-          5. Hybrid merge with entity-confidence-weighted scoring
         """
+        # Check if FAISS index was updated on disk and reload if necessary (Giai đoạn 2.2)
+        meta_path = os.path.join(self.index_dir, 'meta.json')
+        if os.path.exists(meta_path):
+            mtime = os.path.getmtime(meta_path)
+            if not hasattr(self, '_last_loaded_mtime') or mtime > self._last_loaded_mtime:
+                logger.info('[RAG] FAISS Index changed on disk. Reloading in RAGPipeline...')
+                if self.vector_store.load_local(self.index_dir):
+                    self._indexed = True
+                    self._last_loaded_mtime = mtime
+
         cache_key = f"rag_kg_chatbot:{deterministic_hash(query)}:{k}:{user_id}"
         cached = cache.get(cache_key)
         if cached:
@@ -969,7 +1284,7 @@ class RAGPipeline:
         #   (b) KG returned fewer than 2 products OR no explicit KG constraints existed
         # This guarantees fashion / beauty items that may not exist in Neo4j are
         # still surfaced via semantic similarity.
-        VECTOR_MIN_SCORE = 0.2   # lowered to 0.2 for better fashion/beauty recall via FAISS
+        VECTOR_MIN_SCORE = 0.35   # raised to 0.35 to avoid noisy cross-category recommendations
         vector_results: List[dict] = []
         should_run_vector = (
             self.vector_store.product_ids
@@ -1017,9 +1332,31 @@ class RAGPipeline:
                     before - len(merged),
                 )
 
+        # Enforce category consistency post-merge
+        if entities.category:
+            before = len(merged)
+            merged = [r for r in merged if self._category_ok(r, entities)]
+            if len(merged) < before:
+                logger.info(
+                    '[RETRIEVE] Category filter removed %d products not matching %s',
+                    before - len(merged),
+                    entities.category,
+                )
+
+        # Enforce brand consistency post-merge
+        if entities.brand:
+            before = len(merged)
+            merged = [r for r in merged if self._brand_ok(r, entities)]
+            if len(merged) < before:
+                logger.info(
+                    '[RETRIEVE] Brand filter removed %d products not matching %s',
+                    before - len(merged),
+                    entities.brand,
+                )
+
         logger.info('[RETRIEVE] Hybrid merged: %d products (final)', len(merged))
 
-        # 5. Normalise to consistent output format
+        # 5. Normalise to consistent output format and enrich with specifications/variants from Neo4j
         final: List[dict] = []
         for r in merged:
             data = r.get('data') or {}
@@ -1032,12 +1369,81 @@ class RAGPipeline:
                     'description': r.get('description', ''),
                     'image_url': r.get('image_url', ''),
                 }
+            # Make sure data is copied/instantiated as dict
+            data = dict(data)
             final.append({
                 'product_id': r.get('product_id'),
                 'score': r.get('score', 0),
                 'data': data,
                 'sources': r.get('sources', ['unknown']),
             })
+
+        # Enrichment
+        session = kg_client._get_session()
+        if session and final:
+            product_ids = [p['product_id'] for p in final]
+            try:
+                with session:
+                    enrich_result = session.run("""
+                        MATCH (p:Product)
+                        WHERE p.id IN $ids
+                        OPTIONAL MATCH (p)-[:HAS_VARIANT]->(v:Variant)
+                        WITH p, collect({
+                            id: v.id,
+                            name: v.name,
+                            price: v.price,
+                            sku: v.sku,
+                            stock_quantity: v.stock_quantity,
+                            attributes_json: v.attributes
+                        }) AS variants_list
+                        RETURN p.id AS product_id, p.specifications AS specifications_json, p.image_url AS image_url, variants_list
+                    """, ids=product_ids)
+                    
+                    enrich_map = {}
+                    for row in enrich_result:
+                        pid = row['product_id']
+                        specs = {}
+                        specs_str = row['specifications_json']
+                        if specs_str:
+                            try:
+                                specs = json.loads(specs_str)
+                            except Exception:
+                                pass
+                        
+                        variants = []
+                        for v in row['variants_list'] or []:
+                            if v.get('id'):
+                                v_attrs = {}
+                                attrs_str = v.get('attributes_json')
+                                if attrs_str:
+                                    try:
+                                        v_attrs = json.loads(attrs_str)
+                                    except Exception:
+                                        pass
+                                variants.append({
+                                    'id': v.get('id'),
+                                    'name': v.get('name'),
+                                    'price': v.get('price'),
+                                    'sku': v.get('sku'),
+                                    'stock_quantity': v.get('stock_quantity'),
+                                    'attributes': v_attrs
+                                })
+                        enrich_map[pid] = {
+                            'specifications': specs,
+                            'variants': variants,
+                            'image_url': row.get('image_url') or ''
+                        }
+                    
+                    for p in final:
+                        pid = p['product_id']
+                        if pid in enrich_map:
+                            p['data']['specifications'] = enrich_map[pid]['specifications']
+                            p['data']['variants'] = enrich_map[pid]['variants']
+                            # Backfill image_url if not present in the data dict
+                            if enrich_map[pid].get('image_url') and not p['data'].get('image_url'):
+                                p['data']['image_url'] = enrich_map[pid]['image_url']
+            except Exception as e:
+                logger.error(f"Error enriching product search details: {e}")
 
         cache.set(cache_key, (final, entities), timeout=300)
         return final, entities
@@ -1088,6 +1494,88 @@ class RAGPipeline:
         if entities.price_min and price < entities.price_min:
             return False
         return True
+
+    def _category_ok(self, item: dict, entities: ExtractedEntities) -> bool:
+        """
+        Return True if the item's category matches the query's category.
+        """
+        if not entities.category:
+            return True
+        prod_cat = (item.get('data', {}).get('category') or item.get('category') or '').lower()
+        if not prod_cat:
+            return True # if no category info, don't exclude
+            
+        # Check if the product category matches the query category or any of its Neo4j aliases
+        query_cat = entities.category.lower()
+        aliases = [a.lower() for a in QueryParser.CATEGORY_NEO4J_ALIASES.get(entities.category, [])]
+        
+        # Also check patterns
+        patterns = QueryParser.CATEGORY_PATTERNS.get(entities.category, [])
+        
+        if query_cat in prod_cat or any(a in prod_cat for a in aliases) or any(p in prod_cat for p in patterns):
+            return True
+        return False
+
+    def _brand_ok(self, item: dict, entities: ExtractedEntities) -> bool:
+        """
+        Return True if the item's brand matches the query's brand.
+        """
+        if not entities.brand:
+            return True
+        prod_brand = (item.get('data', {}).get('brand') or item.get('brand') or '').lower()
+        if not prod_brand:
+            return True # if no brand info, don't exclude
+            
+        query_brand = entities.brand.lower()
+        # Also check if the brand keywords match
+        brand_keywords = [k.lower() for k in QueryParser.BRAND_PATTERNS.get(entities.brand, [])]
+        
+        if query_brand in prod_brand or any(k in prod_brand for k in brand_keywords):
+            return True
+            
+        # Also check name as fallback (sometimes brand is embedded in the name)
+        prod_name = (item.get('data', {}).get('name') or item.get('name') or '').lower()
+        if query_brand in prod_name or any(k in prod_name for k in brand_keywords):
+            return True
+            
+        return False
+
+    def _variants_ok(self, item: dict, entities: ExtractedEntities) -> bool:
+        """
+        Return True if the item has at least one variant matching the query specifications.
+        """
+        ram = entities.attributes.get('ram')
+        ssd = entities.attributes.get('ssd')
+        size = entities.attributes.get('size')
+        
+        if not (ram or ssd or size):
+            return True
+            
+        variants = item.get('data', {}).get('variants') or item.get('variants') or []
+        if not variants:
+            return True
+            
+        for v in variants:
+            # Check RAM
+            if ram:
+                v_ram = str(v.get('attributes', {}).get('ram') or v.get('attributes', {}).get('RAM') or '').lower()
+                v_name = v.get('name', '').lower()
+                if ram.lower() not in v_ram and ram.lower() not in v_name:
+                    continue
+            # Check SSD
+            if ssd:
+                v_ssd = str(v.get('attributes', {}).get('ssd') or v.get('attributes', {}).get('storage') or '').lower()
+                v_name = v.get('name', '').lower()
+                if ssd.lower() not in v_ssd and ssd.lower() not in v_name:
+                    continue
+            # Check Size
+            if size:
+                v_size = str(v.get('attributes', {}).get('size') or v.get('attributes', {}).get('Size') or '').lower()
+                v_name = v.get('name', '').lower()
+                if size.lower() != v_size and f"size {size.lower()}" not in v_name:
+                    continue
+            return True
+        return False
 
     def _query_knowledge_graph_structured(self, entities: ExtractedEntities, user_id=None, k=5):
         """
@@ -1319,18 +1807,11 @@ class RAGPipeline:
                 if items:
                     kg_info += f"\nSản phẩm thường mua kèm: {', '.join(items)}"
 
-        prompt = f"""Bạn là trợ lý AI của cửa hàng thương mại điện tử.
-Chỉ sử dụng thông tin trong CONTEXT dưới đây để trả lời. \
-Nếu không có sản phẩm phù hợp trong context, hãy trả lời "Tôi không tìm thấy sản phẩm phù hợp".
-Mỗi sản phẩm được đề cập PHẢI đi kèm mã theo định dạng [ID: xxx]. Không được tự bịa thông tin.
-
-CONTEXT SẢN PHẨM:
-{context}
-{kg_info}
-
-CÂU HỎI: {query}
-
-TRẢ LỜI (ngắn gọn, tối đa 3 câu, chỉ dựa trên context):"""
+        prompt = RAG_SYSTEM_PROMPT.format(
+            context=context,
+            kg_info=kg_info,
+            query=query
+        )
 
         try:
             response = httpx.post(
@@ -1393,18 +1874,11 @@ TRẢ LỜI (ngắn gọn, tối đa 3 câu, chỉ dựa trên context):"""
             if items:
                 kg_info = f"\nSản phẩm thường mua kèm: {', '.join(items)}"
 
-        prompt = f"""Bạn là trợ lý AI của cửa hàng thương mại điện tử.
-Chỉ sử dụng thông tin trong CONTEXT dưới đây để trả lời. \
-Nếu không có sản phẩm phù hợp trong context, hãy trả lời "Tôi không tìm thấy sản phẩm phù hợp".
-Mỗi sản phẩm được đề cập PHẢI đi kèm mã theo định dạng [ID: xxx]. Không được tự bịa thông tin.
-
-CONTEXT SẢN PHẨM:
-{context}
-{kg_info}
-
-CÂU HỎI: {query}
-
-TRẢ LỜI (ngắn gọn, tối đa 3 câu, chỉ dựa trên context):"""
+        prompt = RAG_SYSTEM_PROMPT.format(
+            context=context,
+            kg_info=kg_info,
+            query=query
+        )
 
         try:
             async with httpx.AsyncClient(timeout=90.0) as client:
@@ -1438,6 +1912,30 @@ TRẢ LỜI (ngắn gọn, tối đa 3 câu, chỉ dựa trên context):"""
 
         return self._fallback_response(grounded_products)
 
+    def _fetch_review_stats(self, product_id):
+        """
+        Fetch reviews and statistics for a product from review-service.
+        """
+        import httpx
+        review_url = getattr(settings, 'REVIEW_SERVICE_URL', 'http://review-service:8008')
+        try:
+            with httpx.Client(timeout=1.5) as client:
+                stats_res = client.get(f"{review_url}/product/{product_id}/stats/")
+                reviews_res = client.get(f"{review_url}/product/{product_id}/")
+                
+                stats = {}
+                if stats_res.status_code == 200:
+                    stats = stats_res.json()
+                
+                reviews = []
+                if reviews_res.status_code == 200:
+                    reviews = reviews_res.json()
+                
+                return stats, reviews
+        except Exception as e:
+            logger.warning("Failed to fetch review stats for product %s: %s", product_id, e)
+            return {}, []
+
     def _build_context(self, products):
         """
         Build context string injected into the LLM prompt.
@@ -1458,6 +1956,17 @@ TRẢ LỜI (ngắn gọn, tối đa 3 câu, chỉ dựa trên context):"""
                 line += f" ({data['category']})"
             if data.get('brand'):
                 line += f" | {data['brand']}"
+            
+            # Fetch review stats
+            stats, reviews = self._fetch_review_stats(pid)
+            if stats and stats.get('total_reviews', 0) > 0:
+                avg_rating = stats.get('avg_rating', 0)
+                total_reviews = stats.get('total_reviews', 0)
+                line += f" | Đánh giá: {avg_rating}/5⭐ ({total_reviews} nhận xét)"
+                if reviews:
+                    comments = [f"\"{r.get('content')}\"" for r in reviews if r.get('content')]
+                    if comments:
+                        line += f" | Một số bình luận: {', '.join(comments[:2])}"
             lines.append(line)
         return '\n'.join(lines)
 
@@ -1701,9 +2210,12 @@ Nếu không biết câu trả lời, hãy hướng dẫn khách hàng liên h�
 
     async def chat(self, message, conversation_id=None, session_id=None, user_id=None):
         """
-        Xử lý tin nhắn từ người dùng
+        Xử lý tin nhắn từ người dùng (async) với bộ đo thời gian (latency profiling)
         """
         from .models import Conversation, Message
+        import time
+
+        start_time = time.perf_counter()
 
         # Get or create conversation
         conversation = self._get_or_create_conversation(
@@ -1717,53 +2229,140 @@ Nếu không biết câu trả lời, hãy hướng dẫn khách hàng liên h�
             content=message
         )
 
-        # Classify intent
+        # 1. Classify intent
+        t0 = time.perf_counter()
         intent = self.classifier.classify(message)
+        intent_time = time.perf_counter() - t0
 
-        # Check FAQ first
+        # 2. Query parsing (entities)
+        t0 = time.perf_counter()
+        entities = query_parser.parse(message)
+        parsing_time = time.perf_counter() - t0
+
+        # 3. Check FAQ first
+        t0 = time.perf_counter()
         faq_answer = self._check_faq(message)
-        if faq_answer:
+        faq_time = time.perf_counter() - t0
+
+        # Check Semantic Cache (Giai đoạn 4.2)
+        t0 = time.perf_counter()
+        semantic_cached_response = self.rag.semantic_cache.get(message)
+        semantic_cache_time = time.perf_counter() - t0
+
+        products = []
+        kg_context = {}
+        used_kg = False
+        extracted_entities = None
+        retrieval_time = 0.0
+        generation_time = 0.0
+
+        if semantic_cached_response:
+            response, intent, products = semantic_cached_response
+        elif faq_answer:
             response = faq_answer
         elif intent in self.INTENT_RESPONSES:
             import random
             response = random.choice(self.INTENT_RESPONSES[intent])
         elif intent in self.RAG_INTENTS:
-            # Async RAG + KG pipeline (non-blocking Ollama call)
-            entities = query_parser.parse(message)
-            clarification = kg_client.ask_for_clarification(entities)
-            if clarification and entities.confidence < 0.3:
-                response = clarification
-            else:
-                rag_result = self.rag.retrieve(message, k=5, user_id=user_id)
-                products, _ = rag_result if isinstance(rag_result, tuple) else (rag_result, entities)
-                if products:
-                    response = await self.rag.generate_augmented_response_async(
-                        message, products
+            # 4. RAG Retrieval
+            t0 = time.perf_counter()
+            rag_result = self.rag.retrieve(message, k=5, user_id=user_id)
+            retrieval_time = time.perf_counter() - t0
+            
+            products, retrieved_entities = rag_result if isinstance(rag_result, tuple) else (rag_result, entities)
+            
+            extracted_entities = {
+                'category': retrieved_entities.category,
+                'price_max': retrieved_entities.price_max,
+                'price_min': retrieved_entities.price_min,
+                'brand': retrieved_entities.brand,
+                'confidence': retrieved_entities.confidence,
+                'needs_clarification': False
+            }
+            
+            if products:
+                # Get additional KG context
+                top_product_id = products[0].get('product_id')
+                if top_product_id:
+                    kg_context['bought_together'] = kg_client.get_frequently_bought_together(
+                        top_product_id, n=3
                     )
+                    used_kg = True
+
+                # 5. Generate response
+                t0 = time.perf_counter()
+                response = await self.rag.generate_augmented_response_async(
+                    message, products, kg_context
+                )
+                generation_time = time.perf_counter() - t0
+                
+                # Cache response semantically
+                self.rag.semantic_cache.set(message, response, intent=intent, products=products)
+            else:
+                clarification = kg_client.ask_for_clarification(entities)
+                if clarification and entities.confidence < 0.3:
+                    extracted_entities['needs_clarification'] = True
+                    response = clarification
                 else:
                     response = self._no_results_response(entities)
         else:
             # General LLM fallback for non-product queries
+            t0 = time.perf_counter()
             response = await self._generate_llm_response(message, conversation)
+            generation_time = time.perf_counter() - t0
+            
+            # Cache response semantically
+            self.rag.semantic_cache.set(message, response, intent=intent)
+
+        total_time = time.perf_counter() - start_time
+        
+        # Apply output guardrails
+        response = apply_output_guardrails(response, message, products)
+
+        profiling = {
+            'intent_classification_ms': round(intent_time * 1000, 2),
+            'query_parsing_ms': round(parsing_time * 1000, 2),
+            'faq_check_ms': round(faq_time * 1000, 2),
+            'semantic_cache_check_ms': round(semantic_cache_time * 1000, 2),
+            'retrieval_ms': round(retrieval_time * 1000, 2),
+            'generation_ms': round(generation_time * 1000, 2),
+            'total_ms': round(total_time * 1000, 2)
+        }
+
+        if total_time > 3.0:
+            logger.warning(
+                f"[SLO_VIOLATION] Async Chat latency exceeded 3s: {total_time:.2f}s | "
+                f"Metrics: {json.dumps(profiling)}"
+            )
 
         # Save assistant message
         assistant_message = Message.objects.create(
             conversation=conversation,
             role='assistant',
             content=response,
-            metadata={'intent': intent}
+            metadata={
+                'intent': intent,
+                'profiling': profiling,
+                'used_rag': intent in self.RAG_INTENTS and bool(products),
+                'used_knowledge_graph': used_kg,
+                'extracted_entities': extracted_entities
+            }
         )
 
         return {
             'conversation_id': str(conversation.id),
             'response': response,
             'intent': intent,
-            'message_id': str(assistant_message.id)
+            'message_id': str(assistant_message.id),
+            'profiling': profiling
         }
 
     def chat_sync(self, message, conversation_id=None, session_id=None, user_id=None):
         """Synchronous version of chat with RAG + Knowledge Graph + Intent/Entity extraction"""
         from .models import Conversation, Message
+        import time
+
+        start_time = time.perf_counter()
 
         # Get or create conversation
         conversation = self._get_or_create_conversation(
@@ -1777,29 +2376,46 @@ Nếu không biết câu trả lời, hãy hướng dẫn khách hàng liên h�
             content=message
         )
 
-        # Classify intent
+        # 1. Classify intent
+        t0 = time.perf_counter()
         intent = self.classifier.classify(message)
+        intent_time = time.perf_counter() - t0
 
-        # Extract entities using QueryParser
+        # 2. Extract entities using QueryParser
+        t0 = time.perf_counter()
         entities = query_parser.parse(message)
+        parsing_time = time.perf_counter() - t0
 
-        # Check FAQ first
+        # 3. Check FAQ first
+        t0 = time.perf_counter()
         faq_answer = self._check_faq(message)
+        faq_time = time.perf_counter() - t0
+
         products = []
         kg_context = {}
         used_kg = False
         extracted_entities = None
+        
+        # Check Semantic Cache for similar queries first (Giai đoạn 4.2)
+        t0 = time.perf_counter()
+        semantic_cached_response = self.rag.semantic_cache.get(message)
+        semantic_cache_time = time.perf_counter() - t0
+        
+        retrieval_time = 0.0
+        generation_time = 0.0
 
-        if faq_answer:
+        if semantic_cached_response:
+            response, intent, products = semantic_cached_response
+        elif faq_answer:
             response = faq_answer
         elif intent in self.INTENT_RESPONSES:
             import random
             response = random.choice(self.INTENT_RESPONSES[intent])
         elif intent in self.RAG_INTENTS:
-            # Always run RAG first — even for vague queries, FAISS may surface
-            # relevant products via semantic similarity.  Clarification is only
-            # asked when RAG returns zero results AND entity confidence is low.
+            # 4. RAG Retrieval
+            t0 = time.perf_counter()
             result = self.rag.retrieve(message, k=5, user_id=user_id)
+            retrieval_time = time.perf_counter() - t0
 
             # Handle tuple return (products, entities) from retrieve()
             if isinstance(result, tuple):
@@ -1826,10 +2442,15 @@ Nếu không biết câu trả lời, hãy hướng dẫn khách hàng liên h�
                     )
                     used_kg = True
 
-                # Generate response with entity context
+                # 5. Generate response with entity context
+                t0 = time.perf_counter()
                 response = self._generate_structured_response(
                     message, products, entities, kg_context
                 )
+                generation_time = time.perf_counter() - t0
+                
+                # Cache response semantically
+                self.rag.semantic_cache.set(message, response, intent=intent, products=products)
             else:
                 # No products found — ask for clarification only when intent is vague
                 clarification = kg_client.ask_for_clarification(entities)
@@ -1840,7 +2461,34 @@ Nếu không biết câu trả lời, hãy hướng dẫn khách hàng liên h�
                     response = self._no_results_response(entities)
         else:
             # Use LLM for other queries
+            t0 = time.perf_counter()
             response = self._generate_llm_response_sync(message, conversation)
+            generation_time = time.perf_counter() - t0
+            
+            # Cache response semantically
+            self.rag.semantic_cache.set(message, response, intent=intent)
+
+        total_time = time.perf_counter() - start_time
+        
+        # Apply output guardrails
+        response = apply_output_guardrails(response, message, products)
+
+        # Logging SLO violation (> 3s)
+        profiling = {
+            'intent_classification_ms': round(intent_time * 1000, 2),
+            'query_parsing_ms': round(parsing_time * 1000, 2),
+            'faq_check_ms': round(faq_time * 1000, 2),
+            'semantic_cache_check_ms': round(semantic_cache_time * 1000, 2),
+            'retrieval_ms': round(retrieval_time * 1000, 2),
+            'generation_ms': round(generation_time * 1000, 2),
+            'total_ms': round(total_time * 1000, 2)
+        }
+
+        if total_time > 3.0:
+            logger.warning(
+                f"[SLO_VIOLATION] Chat latency exceeded 3s: {total_time:.2f}s | "
+                f"Metrics: {json.dumps(profiling)}"
+            )
 
         # Save assistant message
         assistant_message = Message.objects.create(
@@ -1853,7 +2501,8 @@ Nếu không biết câu trả lời, hãy hướng dẫn khách hàng liên h�
                 'used_rag': intent in self.RAG_INTENTS and bool(products),
                 'used_knowledge_graph': used_kg,
                 'kg_context': kg_context if kg_context else None,
-                'extracted_entities': extracted_entities
+                'extracted_entities': extracted_entities,
+                'profiling': profiling
             }
         )
 
@@ -1869,7 +2518,291 @@ Nếu không biết câu trả lời, hãy hướng dẫn khách hàng liên h�
             'used_rag': intent in self.RAG_INTENTS and bool(products),
             'used_knowledge_graph': used_kg,
             'bought_together': kg_context.get('bought_together') if kg_context else None,
-            'extracted_entities': extracted_entities
+            'extracted_entities': extracted_entities,
+            'profiling': profiling
+        }
+
+    def chat_stream(self, message, conversation_id=None, session_id=None, user_id=None):
+        """Streaming version of chat using Server-Sent Events (SSE) (Giai đoạn 4.1)"""
+        from .models import Conversation, Message
+        import time
+        import json
+
+        start_time = time.perf_counter()
+
+        # Get or create conversation
+        conversation = self._get_or_create_conversation(
+            conversation_id, session_id, user_id
+        )
+
+        # Save user message
+        Message.objects.create(
+            conversation=conversation,
+            role='user',
+            content=message
+        )
+
+        # Classify intent
+        intent = self.classifier.classify(message)
+        entities = query_parser.parse(message)
+        faq_answer = self._check_faq(message)
+
+        # Try semantic cache first
+        t0 = time.perf_counter()
+        semantic_cached_response = self.rag.semantic_cache.get(message)
+        semantic_cache_time = time.perf_counter() - t0
+        
+        if semantic_cached_response:
+            cached_response, cached_intent, cached_products = semantic_cached_response
+            words = cached_response.split()
+            for i, word in enumerate(words):
+                chunk = word + (" " if i < len(words) - 1 else "")
+                yield {
+                    'conversation_id': str(conversation.id),
+                    'chunk': chunk,
+                    'done': False
+                }
+                time.sleep(0.01)
+            
+            profiling = {
+                'semantic_cache_check_ms': round(semantic_cache_time * 1000, 2),
+                'total_ms': round((time.perf_counter() - start_time) * 1000, 2)
+            }
+            assistant_message = Message.objects.create(
+                conversation=conversation,
+                role='assistant',
+                content=cached_response,
+                metadata={
+                    'intent': cached_intent,
+                    'products': [p['product_id'] for p in cached_products] if cached_products else [],
+                    'used_rag': cached_intent in self.RAG_INTENTS and bool(cached_products),
+                    'profiling': profiling
+                }
+            )
+            yield {
+                'conversation_id': str(conversation.id),
+                'message_id': str(assistant_message.id),
+                'done': True,
+                'full_response': cached_response,
+                'products': cached_products if cached_products else None,
+                'profiling': profiling
+            }
+            return
+
+        if faq_answer:
+            words = faq_answer.split()
+            for i, word in enumerate(words):
+                chunk = word + (" " if i < len(words) - 1 else "")
+                yield {
+                    'conversation_id': str(conversation.id),
+                    'chunk': chunk,
+                    'done': False
+                }
+                time.sleep(0.01)
+            
+            assistant_message = Message.objects.create(
+                conversation=conversation,
+                role='assistant',
+                content=faq_answer,
+                metadata={'intent': 'faq'}
+            )
+            yield {
+                'conversation_id': str(conversation.id),
+                'message_id': str(assistant_message.id),
+                'done': True
+            }
+            return
+
+        if intent in self.INTENT_RESPONSES:
+            import random
+            response = random.choice(self.INTENT_RESPONSES[intent])
+            words = response.split()
+            for i, word in enumerate(words):
+                chunk = word + (" " if i < len(words) - 1 else "")
+                yield {
+                    'conversation_id': str(conversation.id),
+                    'chunk': chunk,
+                    'done': False
+                }
+                time.sleep(0.01)
+            
+            assistant_message = Message.objects.create(
+                conversation=conversation,
+                role='assistant',
+                content=response,
+                metadata={'intent': intent}
+            )
+            yield {
+                'conversation_id': str(conversation.id),
+                'message_id': str(assistant_message.id),
+                'done': True
+            }
+            return
+
+        products = []
+        kg_context = {}
+        used_kg = False
+        extracted_entities = None
+
+        if intent in self.RAG_INTENTS:
+            result = self.rag.retrieve(message, k=5, user_id=user_id)
+            if isinstance(result, tuple):
+                products, retrieved_entities = result
+            else:
+                products = result
+                retrieved_entities = entities
+
+            extracted_entities = {
+                'category': retrieved_entities.category,
+                'price_max': retrieved_entities.price_max,
+                'price_min': retrieved_entities.price_min,
+                'brand': retrieved_entities.brand,
+                'confidence': retrieved_entities.confidence,
+                'needs_clarification': False
+            }
+
+            if products:
+                top_product_id = products[0].get('product_id')
+                if top_product_id:
+                    kg_context['bought_together'] = kg_client.get_frequently_bought_together(
+                        top_product_id, n=3
+                    )
+                    used_kg = True
+
+                grounded_products = [p for p in products if p.get('score', 1) >= 0.2]
+                if not grounded_products:
+                    grounded_products = products
+                
+                context = self.rag._build_context(grounded_products)
+                kg_info = ""
+                if kg_context.get('bought_together'):
+                    items = [b.get('name') for b in kg_context['bought_together'][:2] if b.get('name')]
+                    if items:
+                        kg_info += f"\nSản phẩm thường mua kèm: {', '.join(items)}"
+
+                prompt = RAG_SYSTEM_PROMPT.format(
+                    context=context,
+                    kg_info=kg_info,
+                    query=message
+                )
+                
+                url = f"{self.ollama_host}/api/generate"
+                payload = {
+                    "model": self.ollama_model,
+                    "prompt": prompt,
+                    "stream": True,
+                    "options": {"num_predict": 200, "temperature": 0.3},
+                }
+            else:
+                clarification = kg_client.ask_for_clarification(entities)
+                if clarification and entities.confidence < 0.3:
+                    extracted_entities['needs_clarification'] = True
+                    response = clarification
+                else:
+                    response = self._no_results_response(entities)
+                
+                words = response.split()
+                for i, word in enumerate(words):
+                    yield {
+                        'conversation_id': str(conversation.id),
+                        'chunk': word + (" " if i < len(words) - 1 else ""),
+                        'done': False
+                    }
+                    time.sleep(0.01)
+                
+                assistant_message = Message.objects.create(
+                    conversation=conversation,
+                    role='assistant',
+                    content=response,
+                    metadata={'intent': intent, 'extracted_entities': extracted_entities}
+                )
+                yield {
+                    'conversation_id': str(conversation.id),
+                    'message_id': str(assistant_message.id),
+                    'done': True
+                }
+                return
+        else:
+            messages = self._build_context(conversation, message)
+            if len(messages) > 6:
+                messages = [messages[0]] + messages[-5:]
+            url = f"{self.ollama_host}/api/chat"
+            payload = {
+                "model": self.ollama_model,
+                "messages": messages,
+                "stream": True,
+                "options": {"num_predict": 200, "temperature": 0.7},
+            }
+
+        full_response = ""
+        first_token_time = None
+        from chatbot_app.middleware.trace import make_traced_headers
+
+        try:
+            with httpx.stream("POST", url, json=payload, headers=make_traced_headers(), timeout=90.0) as r:
+                for line in r.iter_lines():
+                    if not line:
+                        continue
+                    
+                    if first_token_time is None:
+                        first_token_time = time.perf_counter() - start_time
+                        
+                    data = json.loads(line)
+                    if "response" in data:
+                        chunk = data["response"]
+                    else:
+                        chunk = data.get("message", {}).get("content", "")
+                        
+                    full_response += chunk
+                    yield {
+                        'conversation_id': str(conversation.id),
+                        'chunk': chunk,
+                        'done': False
+                    }
+        except Exception as exc:
+            logger.error(f"Error streaming from Ollama: {exc}")
+            yield {
+                'conversation_id': str(conversation.id),
+                'chunk': "\n[Lỗi kết nối Ollama - Sử dụng phản hồi dự phòng]",
+                'done': False
+            }
+            full_response = self._fallback_response(products)
+
+        # Apply output guardrails
+        full_response = apply_output_guardrails(full_response, message, products)
+
+        # Cache response semantically
+        self.rag.semantic_cache.set(message, full_response, intent=intent, products=products)
+
+        total_time = time.perf_counter() - start_time
+        profiling = {
+            'ttft_ms': round(first_token_time * 1000, 2) if first_token_time else None,
+            'total_ms': round(total_time * 1000, 2)
+        }
+        
+        if total_time > 3.0:
+            logger.warning(f"[SLO_VIOLATION] Streaming chat latency exceeded 3s: {total_time:.2f}s")
+
+        # Save assistant message
+        assistant_message = Message.objects.create(
+            conversation=conversation,
+            role='assistant',
+            content=full_response,
+            metadata={
+                'intent': intent,
+                'products': [p['product_id'] for p in products] if products else [],
+                'used_rag': intent in self.RAG_INTENTS and bool(products),
+                'used_knowledge_graph': used_kg,
+                'profiling': profiling
+            }
+        )
+
+        yield {
+            'conversation_id': str(conversation.id),
+            'message_id': str(assistant_message.id),
+            'done': True,
+            'full_response': full_response,
+            'profiling': profiling
         }
 
     def _generate_structured_response(self, query, products, entities: ExtractedEntities, kg_context=None):

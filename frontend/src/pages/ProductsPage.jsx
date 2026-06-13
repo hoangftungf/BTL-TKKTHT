@@ -1,9 +1,21 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchProducts, fetchCategories } from '../store/slices/productSlice';
 import ProductGrid from '../components/product/ProductGrid';
 import { FunnelIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { 
+  Smartphone, 
+  Laptop, 
+  Tablet, 
+  Watch, 
+  Trophy, 
+  Home as HomeIcon, 
+  BookOpen, 
+  Sparkles, 
+  Shirt, 
+  Box
+} from 'lucide-react';
 
 const ProductsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -23,6 +35,14 @@ const ProductsPage = () => {
   useEffect(() => {
     dispatch(fetchCategories());
   }, [dispatch]);
+
+  // Redirect to first parent category if no category is selected (Tiki/Shopee UX pattern)
+  useEffect(() => {
+    if (categories.length > 0 && !currentCategory) {
+      searchParams.set('category', categories[0].id);
+      setSearchParams(searchParams);
+    }
+  }, [categories, currentCategory, searchParams, setSearchParams]);
 
   useEffect(() => {
     const params = {
@@ -49,6 +69,7 @@ const ProductsPage = () => {
     } else {
       searchParams.delete('category');
     }
+    searchParams.delete('page'); // Reset to page 1 on category change
     setSearchParams(searchParams);
   };
 
@@ -60,31 +81,109 @@ const ProductsPage = () => {
     { value: '-rating_avg', label: 'Đánh giá cao' },
   ];
 
-  // Tim ten danh muc hien tai
-  const findCategoryName = (categoryId, cats) => {
+  // Map dynamic categories to icons
+  const getCategoryIcon = (name) => {
+    const n = name.toLowerCase();
+    if (n.includes('thoại') || n.includes('phone')) return <Smartphone className="w-4 h-4 text-blue-500" />;
+    if (n.includes('lap') || n.includes('máy tính')) return <Laptop className="w-4 h-4 text-blue-500" />;
+    if (n.includes('bản') || n.includes('tablet')) return <Tablet className="w-4 h-4 text-blue-500" />;
+    if (n.includes('đồng hồ') || n.includes('watch')) return <Watch className="w-4 h-4 text-blue-500" />;
+    if (n.includes('thao') || n.includes('sport')) return <Trophy className="w-4 h-4 text-green-500" />;
+    if (n.includes('dụng') || n.includes('nhà') || n.includes('home')) return <HomeIcon className="w-4 h-4 text-yellow-500" />;
+    if (n.includes('sách') || n.includes('book')) return <BookOpen className="w-4 h-4 text-orange-500" />;
+    if (n.includes('phẩm') || n.includes('mỹ') || n.includes('beauty')) return <Sparkles className="w-4 h-4 text-pink-500" />;
+    if (n.includes('trang') || n.includes('fashion') || n.includes('áo') || n.includes('quần')) return <Shirt className="w-4 h-4 text-purple-500" />;
+    return <Box className="w-4 h-4 text-gray-500" />;
+  };
+
+  // Find path of the current category (for Breadcrumbs and auto-expanding tree)
+  const findCategoryPath = (categoryId, cats, currentPath = []) => {
     for (const cat of cats) {
-      if (String(cat.id) === categoryId) return cat.name;
+      if (String(cat.id) === String(categoryId)) {
+        return [...currentPath, cat];
+      }
       if (cat.children) {
-        for (const child of cat.children) {
-          if (String(child.id) === categoryId) return child.name;
-          if (child.children) {
-            for (const subChild of child.children) {
-              if (String(subChild.id) === categoryId) return subChild.name;
-            }
-          }
-        }
+        const path = findCategoryPath(categoryId, cat.children, [...currentPath, cat]);
+        if (path) return path;
       }
     }
     return null;
   };
 
-  const currentCategoryName = currentCategory ? findCategoryName(currentCategory, categories) : null;
+  const categoryPath = currentCategory ? (findCategoryPath(currentCategory, categories) || []) : [];
+  const currentCategoryName = categoryPath.length > 0 ? categoryPath[categoryPath.length - 1].name : null;
+
+  // Recursive category tree renderer
+  const renderCategoryTree = (cats, level = 0) => {
+    return cats.map((cat) => {
+      const isSelected = String(cat.id) === currentCategory;
+      const isParentOfSelected = categoryPath.some(p => String(p.id) === String(cat.id));
+      const hasChildren = cat.children && cat.children.length > 0;
+
+      return (
+        <div key={cat.id} className="space-y-1">
+          <button
+            onClick={() => handleCategoryChange(cat.id)}
+            className={`flex items-center w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors ${
+              isSelected 
+                ? 'bg-blue-50 text-blue-600 font-bold' 
+                : 'text-gray-700 hover:bg-gray-150'
+            }`}
+            style={{ paddingLeft: `${level * 12 + 12}px` }}
+          >
+            {level === 0 && (
+              <span className="mr-2 flex-shrink-0">
+                {getCategoryIcon(cat.name)}
+              </span>
+            )}
+            {level > 0 && (
+              <span className="mr-1.5 text-gray-400 font-semibold">•</span>
+            )}
+            <span className="truncate">{cat.name}</span>
+          </button>
+          
+          {hasChildren && (isSelected || isParentOfSelected) && (
+            <div className="space-y-1 mt-0.5">
+              {renderCategoryTree(cat.children, level + 1)}
+            </div>
+          )}
+        </div>
+      );
+    });
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Breadcrumb Navigation */}
+      <nav className="flex items-center space-x-2 text-xs text-gray-500 mb-6 overflow-x-auto whitespace-nowrap pb-2 scrollbar-none">
+        <Link to="/" className="hover:text-blue-600 font-medium transition-colors">
+          Trang chủ
+        </Link>
+        {categoryPath.map((cat, index) => {
+          const isLast = index === categoryPath.length - 1;
+          return (
+            <span key={cat.id} className="flex items-center space-x-2">
+              <span className="text-gray-400">/</span>
+              {isLast ? (
+                <span className="text-gray-800 font-bold truncate max-w-[150px]">
+                  {cat.name}
+                </span>
+              ) : (
+                <button
+                  onClick={() => handleCategoryChange(cat.id)}
+                  className="hover:text-blue-600 font-medium transition-colors truncate max-w-[150px]"
+                >
+                  {cat.name}
+                </button>
+              )}
+            </span>
+          );
+        })}
+      </nav>
+
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-gray-900">
-          {currentCategoryName || 'Tất cả sản phẩm'}
+          {currentCategoryName || 'Sản phẩm'}
         </h1>
         <button
           onClick={() => setShowFilters(!showFilters)}
@@ -123,29 +222,14 @@ const ProductsPage = () => {
               </button>
             </div>
 
-            {/* Categories */}
+            {/* Categories Tree */}
             <div className="mb-6">
-              <h4 className="font-medium text-gray-700 mb-2">Danh mục</h4>
-              <div className="space-y-2">
-                <button
-                  onClick={() => handleCategoryChange('')}
-                  className={`block w-full text-left px-3 py-2 rounded-lg text-sm ${
-                    !currentCategory ? 'bg-primary-50 text-primary-600' : 'hover:bg-gray-100'
-                  }`}
-                >
-                  Tất cả
-                </button>
-                {categories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    onClick={() => handleCategoryChange(cat.id)}
-                    className={`block w-full text-left px-3 py-2 rounded-lg text-sm ${
-                      currentCategory === String(cat.id) ? 'bg-primary-50 text-primary-600' : 'hover:bg-gray-100'
-                    }`}
-                  >
-                    {cat.name}
-                  </button>
-                ))}
+              <h4 className="font-semibold text-gray-900 mb-3 px-1 text-sm flex items-center gap-2">
+                <span className="w-1.5 h-4 bg-blue-600 rounded-full"></span>
+                Danh mục
+              </h4>
+              <div className="space-y-1 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
+                {renderCategoryTree(categories)}
               </div>
             </div>
 

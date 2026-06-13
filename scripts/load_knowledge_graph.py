@@ -75,16 +75,56 @@ class KnowledgeGraphLoader:
         print("Indexes created")
 
     def load_products(self, products_df):
-        """Load products vào graph"""
+        """Load products vào graph với bóc tách Brand, Material, Color"""
         print(f"\nLoading {len(products_df)} products...")
+        
+        # Color/Material patterns
+        colors = {
+            'Đen': ['mau den', 'màu đen', 'đen', 'black', 'den'],
+            'Trắng': ['mau trang', 'màu trắng', 'trắng', 'white', 'trang'],
+            'Hồng': ['mau hong', 'màu hồng', 'hồng', 'pink', 'hong'],
+            'Đỏ': ['mau do', 'màu đỏ', 'đỏ', 'red', 'do'],
+            'Xanh': ['mau xanh', 'màu xanh', 'xanh', 'blue', 'green'],
+            'Vàng': ['mau vang', 'màu vàng', 'vàng', 'yellow', 'vang'],
+            'Nâu': ['mau nau', 'màu nâu', 'nâu', 'brown', 'nau'],
+            'Xám': ['mau xam', 'màu xám', 'xám', 'grey', 'gray', 'xam'],
+            'Cam': ['mau cam', 'màu cam', 'cam', 'orange'],
+            'Tím': ['mau tim', 'màu tím', 'tím', 'purple', 'tim']
+        }
+        
+        materials = {
+            'Jean': ['jean', 'bò', 'denim', 'bo'],
+            'Cotton': ['cotton', 'thun'],
+            'Lụa': ['lụa', 'silk', 'lua'],
+            'Da': [' da ', 'da bò', 'da thật', 'leather'],
+            'Len': ['len', 'wool'],
+            'Polyester': ['polyester', 'poly', 'nỉ', 'spandex', 'ni'],
+            'Kaki': ['kaki', 'khaki'],
+            'Linen': ['linen', 'đũi', 'dui']
+        }
 
         with self.driver.session() as session:
             for _, row in products_df.iterrows():
+                name = row['name'] or ""
+                desc = row.get('description', '') or row.get('short_description', '') or ""
+                name_lower = name.lower()
+                desc_lower = desc.lower()
+                
+                # Extract color & material
+                color = next((c for c, kws in colors.items() if any(kw in name_lower or kw in desc_lower for kw in kws)), None)
+                material = next((m for m, kws in materials.items() if any(kw in name_lower or kw in desc_lower for kw in kws)), None)
+                
+                status = row.get('status', 'active')
+                stock_qty = int(row.get('stock_quantity', 100))
+
                 # Create Product node
                 session.run("""
                     MERGE (p:Product {id: $id})
-                    SET p.name = $name, p.price = $price
-                """, id=row['product_id'], name=row['name'], price=row['price'])
+                    SET p.name = $name, 
+                        p.price = $price, 
+                        p.status = $status, 
+                        p.stock_quantity = $stock_quantity
+                """, id=row['product_id'], name=name, price=row['price'], status=status, stock_quantity=stock_qty)
 
                 # Create Category and relationship
                 session.run("""
@@ -101,6 +141,24 @@ class KnowledgeGraphLoader:
                     MATCH (p:Product {id: $product_id})
                     MERGE (p)-[:MADE_BY]->(b)
                 """, brand=row['brand'], product_id=row['product_id'])
+                
+                # Create Color and relationship
+                if color:
+                    session.run("""
+                        MERGE (co:Color {name: $color})
+                        WITH co
+                        MATCH (p:Product {id: $product_id})
+                        MERGE (p)-[:HAS_COLOR]->(co)
+                    """, color=color, product_id=row['product_id'])
+
+                # Create Material and relationship
+                if material:
+                    session.run("""
+                        MERGE (ma:Material {name: $material})
+                        WITH ma
+                        MATCH (p:Product {id: $product_id})
+                        MERGE (p)-[:HAS_MATERIAL]->(ma)
+                    """, material=material, product_id=row['product_id'])
 
         print(f"  Loaded {len(products_df)} products")
         print(f"  Categories: {products_df['category'].nunique()}")

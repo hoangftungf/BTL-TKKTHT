@@ -97,6 +97,7 @@ class Product(models.Model):
     brand = models.CharField(max_length=255, blank=True, verbose_name='Thương hiệu')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', verbose_name='Trạng thái')
     stock_quantity = models.IntegerField(default=0, validators=[MinValueValidator(0)], verbose_name='Số lượng tồn')
+    specifications = models.JSONField(default=dict, blank=True, verbose_name='Thông số kỹ thuật')
     low_stock_threshold = models.IntegerField(default=10, verbose_name='Ngưỡng tồn kho thấp')
     weight = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name='Cân nặng (kg)')
     is_featured = models.BooleanField(default=False, verbose_name='Nổi bật')

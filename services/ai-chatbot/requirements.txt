@@ -15,3 +15,8 @@ faiss-cpu>=1.7.4
 
 # Knowledge Graph
 neo4j>=5.15.0
+
+# Async & ASGI Support
+celery>=5.3.0
+uvicorn>=0.22.0
+

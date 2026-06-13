@@ -146,6 +146,67 @@ class AutocompleteView(APIView):
         })
 
 
+class HybridSearchView(APIView):
+    """Hybrid search: keyword + vector semantic search with RRF fusion."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        query = request.data.get('query', '')
+        mode = request.data.get('mode', 'hybrid')
+        page = int(request.data.get('page', 1))
+        page_size = int(request.data.get('page_size', 20))
+
+        filters = {
+            'category': request.data.get('category'),
+            'brand': request.data.get('brand'),
+            'min_price': request.data.get('min_price'),
+            'max_price': request.data.get('max_price'),
+        }
+        filters = {k: v for k, v in filters.items() if v is not None}
+
+        if mode not in ('keyword', 'vector', 'hybrid'):
+            mode = 'hybrid'
+
+        result = search_engine.hybrid_search(
+            query=query,
+            filters=filters if filters else None,
+            page=page,
+            page_size=page_size,
+            mode=mode,
+        )
+
+        if request.user and request.user.is_authenticated and query:
+            track_search(
+                user_id=request.user.id,
+                query=query,
+                results_count=result.get('total', 0),
+                metadata={'filters': filters, 'page': page, 'mode': mode},
+            )
+
+        if result['results']:
+            product_ids = [r['product_id'] for r in result['results']]
+            products = self._fetch_products(product_ids)
+            for r in result['results']:
+                r['product'] = products.get(str(r['product_id']))
+
+        return Response(result)
+
+    def _fetch_products(self, product_ids):
+        products = {}
+        for pid in product_ids:
+            try:
+                response = httpx.get(
+                    f"{settings.PRODUCT_SERVICE_URL}/{pid}/",
+                    timeout=5.0,
+                )
+                if response.status_code == 200:
+                    products[str(pid)] = response.json()
+            except Exception:
+                pass
+        return products
+
+
 class IndexProductsView(APIView):
     permission_classes = [AllowAny]  # Should be admin only
 

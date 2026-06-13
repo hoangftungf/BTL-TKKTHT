@@ -125,7 +125,7 @@ const AdminUsersPage = () => {
             placeholder="Tìm theo email hoặc SĐT..."
             className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
           />
-          <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
+          <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
         </form>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
@@ -243,9 +243,9 @@ const AdminUsersPage = () => {
                           title={userItem.is_active ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
                         >
                           {userItem.is_active ? (
-                            <UserMinusIcon className="w-4.5 h-4.5" />
+                            <UserMinusIcon className="w-5 h-5" />
                           ) : (
-                            <UserPlusIcon className="w-4.5 h-4.5" />
+                            <UserPlusIcon className="w-5 h-5" />
                           )}
                         </button>
                       </div>

@@ -1,17 +1,26 @@
 import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import userService from '../services/userService';
 import productService from '../services/productService';
 import AddressForm from '../components/address/AddressForm';
 import ProductCard from '../components/product/ProductCard';
-import { UserIcon, MapPinIcon, HeartIcon, BellIcon, PencilIcon, TrashIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { 
+  UserIcon, 
+  MapPinIcon, 
+  HeartIcon, 
+  PencilIcon, 
+  TrashIcon, 
+  PlusIcon 
+} from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
 const ProfilePage = () => {
   const { user } = useSelector((state) => state.auth);
   const { items: wishlistItems } = useSelector((state) => state.wishlist);
-  const [activeTab, setActiveTab] = useState('profile');
+  
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState(location.state?.activeTab || 'profile');
   const [profile, setProfile] = useState(null);
   const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -90,6 +99,12 @@ const ProfilePage = () => {
     }
   };
 
+  useEffect(() => {
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+    }
+  }, [location.state]);
+
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -163,7 +178,6 @@ const ProfilePage = () => {
     { id: 'profile', label: 'Thông tin cá nhân', icon: UserIcon },
     { id: 'addresses', label: 'Sổ địa chỉ', icon: MapPinIcon },
     { id: 'wishlist', label: 'Yêu thích', icon: HeartIcon },
-    { id: 'notifications', label: 'Thông báo', icon: BellIcon },
   ];
 
   return (
@@ -213,41 +227,65 @@ const ProfilePage = () => {
                 {loading ? (
                   <p>Đang tải...</p>
                 ) : (
-                  <form onSubmit={handleProfileSubmit} className="space-y-4 max-w-lg">
+                  <form onSubmit={handleProfileSubmit} className="max-w-md space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Họ và tên</label>
+                      <label className="label">Họ và tên</label>
                       <input
                         type="text"
                         value={profileForm.full_name}
                         onChange={(e) => setProfileForm({ ...profileForm, full_name: e.target.value })}
                         className="input"
-                        placeholder="Nhập họ và tên"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                      <label className="label">Email</label>
                       <input
                         type="email"
-                        value={user?.email}
+                        value={user?.email || ''}
                         disabled
-                        className="input bg-gray-50"
+                        className="input bg-gray-50 cursor-not-allowed"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Giới tính</label>
-                      <select
-                        value={profileForm.gender}
-                        onChange={(e) => setProfileForm({ ...profileForm, gender: e.target.value })}
-                        className="input"
-                      >
-                        <option value="">Chọn giới tính</option>
-                        <option value="male">Nam</option>
-                        <option value="female">Nữ</option>
-                        <option value="other">Khác</option>
-                      </select>
+                      <label className="label">Giới tính</label>
+                      <div className="flex space-x-4 mt-2">
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="gender"
+                            value="male"
+                            checked={profileForm.gender === 'male'}
+                            onChange={(e) => setProfileForm({ ...profileForm, gender: e.target.value })}
+                            className="text-primary-650 focus:ring-primary-500"
+                          />
+                          <span>Nam</span>
+                        </label>
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="gender"
+                            value="female"
+                            checked={profileForm.gender === 'female'}
+                            onChange={(e) => setProfileForm({ ...profileForm, gender: e.target.value })}
+                            className="text-primary-650 focus:ring-primary-500"
+                          />
+                          <span>Nữ</span>
+                        </label>
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="gender"
+                            value="other"
+                            checked={profileForm.gender === 'other'}
+                            onChange={(e) => setProfileForm({ ...profileForm, gender: e.target.value })}
+                            className="text-primary-650 focus:ring-primary-500"
+                          />
+                          <span>Khác</span>
+                        </label>
+                      </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Ngày sinh</label>
+                      <label className="label">Ngày sinh</label>
                       <input
                         type="date"
                         value={profileForm.date_of_birth}
@@ -255,7 +293,7 @@ const ProfilePage = () => {
                         className="input"
                       />
                     </div>
-                    <button type="submit" disabled={saving} className="btn-primary">
+                    <button type="submit" disabled={saving} className="btn-primary w-full">
                       {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
                     </button>
                   </form>
@@ -266,98 +304,63 @@ const ProfilePage = () => {
             {/* Addresses Tab */}
             {activeTab === 'addresses' && (
               <div>
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex justify-between items-center mb-6">
                   <h2 className="text-lg font-semibold text-gray-900">Sổ địa chỉ</h2>
                   {!showAddressForm && (
-                    <button
-                      onClick={() => {
-                        setEditingAddress(null);
-                        setShowAddressForm(true);
-                      }}
-                      className="btn-primary text-sm flex items-center"
-                    >
-                      <PlusIcon className="w-4 h-4 mr-1" />
-                      Thêm địa chỉ
+                    <button onClick={() => setShowAddressForm(true)} className="btn-outline flex items-center space-x-1 py-1.5 text-sm">
+                      <PlusIcon className="w-4 h-4" />
+                      <span>Thêm địa chỉ mới</span>
                     </button>
                   )}
                 </div>
 
-                {/* Address Form */}
-                {showAddressForm && (
-                  <div className="border-2 border-dashed border-primary-300 rounded-lg p-4 mb-6 bg-primary-50">
-                    <h3 className="font-medium text-gray-900 mb-4">
-                      {editingAddress ? 'Sửa địa chỉ' : 'Thêm địa chỉ mới'}
-                    </h3>
+                {showAddressForm ? (
+                  <div className="bg-gray-50 p-4 rounded-lg border">
+                    <h3 className="font-medium text-gray-900 mb-4">{editingAddress ? 'Chỉnh sửa địa chỉ' : 'Thêm địa chỉ mới'}</h3>
                     <AddressForm
-                      initialData={editingAddress || {}}
+                      initialData={editingAddress}
                       onSubmit={handleAddressSubmit}
                       onCancel={resetAddressForm}
-                      saving={saving}
-                      submitText={editingAddress ? 'Cập nhật' : 'Thêm địa chỉ'}
                     />
                   </div>
-                )}
-
-                {/* Address List */}
-                {addresses.length === 0 && !showAddressForm ? (
+                ) : loading ? (
+                  <p>Đang tải...</p>
+                ) : addresses.length === 0 ? (
                   <div className="text-center py-12 bg-gray-50 rounded-lg">
                     <MapPinIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500 mb-4">Bạn chưa có địa chỉ nào</p>
-                    <button
-                      onClick={() => setShowAddressForm(true)}
-                      className="btn-primary"
-                    >
-                      Thêm địa chỉ đầu tiên
-                    </button>
+                    <p className="text-gray-500">Chưa có địa chỉ nào</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {addresses.map((addr) => (
-                      <div key={addr.id} className="border rounded-lg p-4 hover:border-primary-300 transition-colors">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-grow">
-                            <div className="flex items-center flex-wrap gap-2 mb-1">
-                              <span className="font-medium text-gray-900">{addr.recipient_name}</span>
-                              <span className="text-gray-300">|</span>
-                              <span className="text-gray-600">{addr.phone}</span>
-                              {addr.is_default && (
-                                <span className="px-2 py-0.5 bg-primary-100 text-primary-700 text-xs rounded">
-                                  Mặc định
-                                </span>
-                              )}
-                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
-                                {addr.address_type === 'home' ? 'Nhà riêng' : addr.address_type === 'office' ? 'Văn phòng' : 'Khác'}
-                              </span>
-                            </div>
-                            <p className="text-gray-600 text-sm">
-                              {addr.street_address}, {addr.ward}, {addr.district}, {addr.province}
-                            </p>
+                    {addresses.map((address) => (
+                      <div key={address.id} className="p-4 bg-white border rounded-lg hover:shadow-sm transition-all flex justify-between items-start">
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-semibold text-gray-950">{address.recipient_name}</span>
+                            <span className="text-gray-400">|</span>
+                            <span className="text-gray-600">{address.phone}</span>
+                            {address.is_default && (
+                              <span className="bg-primary-100 text-primary-800 text-[10px] px-2 py-0.5 rounded font-medium">Mặc định</span>
+                            )}
                           </div>
-                          <div className="flex items-center space-x-2 ml-4">
-                            <button
-                              onClick={() => handleEditAddress(addr)}
-                              className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded"
-                              title="Sửa"
-                            >
-                              <PencilIcon className="w-4 h-4" />
+                          <p className="text-gray-600 text-sm">
+                            {address.street_address}, {address.ward}, {address.district}, {address.province}
+                          </p>
+                          {!address.is_default && (
+                            <button onClick={() => handleSetDefault(address)} className="text-primary-600 hover:text-primary-850 text-xs font-semibold mt-2 block">
+                              Đặt làm mặc định
                             </button>
-                            <button
-                              onClick={() => handleDeleteAddress(addr.id)}
-                              className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"
-                              title="Xóa"
-                            >
-                              <TrashIcon className="w-4 h-4" />
-                            </button>
-                          </div>
+                          )}
                         </div>
-                        {!addr.is_default && (
-                          <button
-                            onClick={() => handleSetDefault(addr)}
-                            className="mt-2 text-sm text-primary-600 hover:text-primary-700"
-                          >
-                            Đặt làm mặc định
+
+                        <div className="flex space-x-2 shrink-0">
+                          <button onClick={() => handleEditAddress(address)} className="p-1 text-gray-500 hover:text-primary-600 rounded-md hover:bg-gray-50" title="Chỉnh sửa">
+                            <PencilIcon className="w-4 h-4" />
                           </button>
-                        )}
+                          <button onClick={() => handleDeleteAddress(address.id)} className="p-1 text-gray-500 hover:text-red-650 rounded-md hover:bg-gray-50" title="Xóa">
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -368,17 +371,15 @@ const ProfilePage = () => {
             {/* Wishlist Tab */}
             {activeTab === 'wishlist' && (
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-6">
-                  San pham yeu thich ({wishlistProducts.length})
-                </h2>
+                <h2 className="text-lg font-semibold text-gray-900 mb-6">Sản phẩm yêu thích</h2>
                 {loadingWishlist ? (
-                  <p className="text-center py-8">Dang tai...</p>
+                  <p className="text-center py-8">Đang tải...</p>
                 ) : wishlistProducts.length === 0 ? (
                   <div className="text-center py-12 bg-gray-50 rounded-lg">
                     <HeartIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500 mb-4">Chua co san pham yeu thich</p>
+                    <p className="text-gray-500 mb-4">Chưa có sản phẩm yêu thích</p>
                     <Link to="/products" className="btn-primary">
-                      Kham pha san pham
+                      Khám phá sản phẩm
                     </Link>
                   </div>
                 ) : (
@@ -388,17 +389,6 @@ const ProfilePage = () => {
                     ))}
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* Notifications Tab */}
-            {activeTab === 'notifications' && (
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-6">Thông báo</h2>
-                <div className="text-center py-12 bg-gray-50 rounded-lg">
-                  <BellIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">Không có thông báo mới</p>
-                </div>
               </div>
             )}
           </div>

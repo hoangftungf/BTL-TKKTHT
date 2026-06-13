@@ -293,7 +293,7 @@ class RAGEngine:
 
         try:
             response = httpx.get(
-                f"{product_service_url}/api/products/?page_size=1000",
+                f"{product_service_url}/?page_size=1000",
                 timeout=30.0
             )
 

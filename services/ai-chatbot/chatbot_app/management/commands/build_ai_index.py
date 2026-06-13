@@ -97,6 +97,11 @@ class Command(BaseCommand):
             cat = p.get('category', '')
             if isinstance(cat, dict):
                 cat = cat.get('name', '')
+            img_url = p.get('image_url', '')
+            if not img_url:
+                primary_img = p.get('primary_image')
+                if isinstance(primary_img, dict):
+                    img_url = primary_img.get('image', '')
             store.add(
                 product_id=p['id'],
                 embedding=emb,
@@ -106,7 +111,7 @@ class Command(BaseCommand):
                     'category': cat,
                     'brand': p.get('brand', ''),
                     'description': (p.get('description') or '')[:300],
-                    'image_url': p.get('image_url', ''),
+                    'image_url': img_url,
                 },
             )
 

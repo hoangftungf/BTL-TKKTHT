@@ -126,7 +126,7 @@ const CartPage = () => {
                 type="checkbox"
                 checked={items.length > 0 && selectedItemIds.length === items.length}
                 onChange={toggleSelectAll}
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-4.5 w-4.5 cursor-pointer accent-primary-600"
+                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-4 w-4 cursor-pointer accent-primary-600"
               />
               <span className="text-gray-700 font-semibold text-sm">Sản Phẩm</span>
             </div>

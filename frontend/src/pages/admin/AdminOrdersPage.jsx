@@ -125,6 +125,8 @@ const AdminOrdersPage = () => {
         return 'bg-purple-950/20 text-purple-400 border-purple-900/40';
       case 'delivered':
         return 'bg-emerald-950/20 text-emerald-400 border-emerald-900/40';
+      case 'completed':
+        return 'bg-green-950/20 text-green-400 border-green-900/40';
       case 'cancelled':
         return 'bg-rose-950/20 text-rose-400 border-rose-900/40';
       default:
@@ -138,7 +140,8 @@ const AdminOrdersPage = () => {
       case 'confirmed': return 'Đã xác nhận';
       case 'processing': return 'Đang xử lý';
       case 'shipping': return 'Đang giao hàng';
-      case 'delivered': return 'Đã giao hàng';
+      case 'delivered': return 'Đã giao hàng (Shipper)';
+      case 'completed': return 'Đã nhận hàng (Hoàn thành)';
       case 'cancelled': return 'Đã hủy';
       default: return status;
     }
@@ -162,7 +165,7 @@ const AdminOrdersPage = () => {
             placeholder="Tìm theo Mã đơn..."
             className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
           />
-          <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
+          <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
         </form>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
@@ -178,7 +181,8 @@ const AdminOrdersPage = () => {
               <option value="confirmed" className="bg-slate-900">Đã xác nhận</option>
               <option value="processing" className="bg-slate-900">Đang xử lý</option>
               <option value="shipping" className="bg-slate-900">Đang giao</option>
-              <option value="delivered" className="bg-slate-900">Đã giao</option>
+              <option value="delivered" className="bg-slate-900">Đã giao (Shipper)</option>
+              <option value="completed" className="bg-slate-900">Đã nhận hàng (Hoàn thành)</option>
               <option value="cancelled" className="bg-slate-900">Đã hủy</option>
             </select>
           </div>
@@ -286,7 +290,7 @@ const AdminOrdersPage = () => {
                 onClick={() => setIsDetailModalOpen(false)}
                 className="p-1 rounded-md text-slate-400 hover:text-white focus:outline-none"
               >
-                <XMarkIcon className="w-5.5 h-5.5" />
+                <XMarkIcon className="w-5 h-5" />
               </button>
             </div>
 
@@ -328,7 +332,7 @@ const AdminOrdersPage = () => {
               {/* Shipping info */}
               <div className="bg-slate-900 p-4 rounded-xl border border-slate-850 space-y-2">
                 <div className="flex items-center space-x-2 border-b border-slate-800 pb-2">
-                  <MapPinIcon className="w-4.5 h-4.5 text-indigo-400" />
+                  <MapPinIcon className="w-5 h-5 text-indigo-400" />
                   <h4 className="text-xs font-bold text-slate-300 uppercase">Thông tin giao nhận</h4>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -390,7 +394,7 @@ const AdminOrdersPage = () => {
               )}
 
               {/* Status Update Note Input */}
-              {selectedOrder.status !== 'delivered' && selectedOrder.status !== 'cancelled' && (
+              {selectedOrder.status !== 'delivered' && selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && (
                 <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800/80 space-y-3">
                   <label className="block text-xs font-bold text-slate-400 uppercase">Ghi chú cập nhật trạng thái (Note)</label>
                   <input
@@ -415,7 +419,7 @@ const AdminOrdersPage = () => {
 
               <div className="flex items-center space-x-2">
                 {/* Cancel action */}
-                {selectedOrder.status !== 'delivered' && selectedOrder.status !== 'cancelled' && (
+                {selectedOrder.status !== 'delivered' && selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && (
                   <button 
                     disabled={updatingStatus}
                     onClick={handleCancelOrder}

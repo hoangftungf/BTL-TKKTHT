@@ -13,7 +13,8 @@ class ProductIndex(models.Model):
     brand = models.CharField(max_length=255, blank=True, db_index=True)
     price = models.DecimalField(max_digits=12, decimal_places=0)
     keywords = models.TextField(blank=True)  # Extracted keywords
-    search_vector = models.TextField(blank=True)  # For full-text search
+    search_vector = models.TextField(blank=True)  # For full-text search (deprecated)
+    embedding = models.BinaryField(null=True, blank=True)  # 768-dim float32 from nomic-embed-text
     popularity_score = models.FloatField(default=0)
     updated_at = models.DateTimeField(auto_now=True)
 
