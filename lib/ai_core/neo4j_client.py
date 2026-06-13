@@ -21,6 +21,17 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
+# Minimal entity-like container for ask_for_clarification
+class _QueryEntities:
+    """Minimal entity container used by ask_for_clarification."""
+    def __init__(self, entities):
+        self.category = getattr(entities, 'category', None)
+        self.brand = getattr(entities, 'brand', None)
+        self.price_min = getattr(entities, 'price_min', None)
+        self.price_max = getattr(entities, 'price_max', None)
+        self.confidence = getattr(entities, 'confidence', 0.0)
+
+
 class UnifiedKGClient:
     """
     Singleton Neo4j client cho tất cả AI services.
@@ -505,6 +516,22 @@ class UnifiedKGClient:
                 except Exception as e:
                     logger.warning(f"Index creation warning: {e}")
         logger.info("Neo4j indexes created/verified")
+
+    def ask_for_clarification(self, entities) -> Optional[str]:
+        """Generate a clarification prompt when product search is ambiguous."""
+        ent = _QueryEntities(entities)
+        hints = []
+        if not ent.category:
+            hints.append("danh mục sản phẩm bạn muốn tìm")
+        if not ent.brand and ent.category:
+            hints.append(f"thương hiệu {ent.category} bạn quan tâm")
+        if ent.price_min and not ent.price_max:
+            hints.append("mức giá tối đa bạn muốn")
+        if not hints:
+            hints.append("thông tin chi tiết hơn về sản phẩm bạn cần")
+        msg = f"Bạn có thể cho tôi biết thêm {' và '.join(hints)} không?"
+        logger.info(f"[KG] ask_for_clarification: confidence={ent.confidence}, msg='{msg}'")
+        return msg
 
     def clear_graph(self):
         """Clear all nodes and relationships (use with caution!)."""

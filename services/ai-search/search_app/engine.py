@@ -1022,7 +1022,10 @@ class SearchEngine:
         total = queryset.count()
         start = (page - 1) * page_size
         end = start + page_size
-        results = list(queryset[start:end].values())
+        results = list(queryset[start:end].values(
+            'product_id', 'name', 'name_normalized', 'description',
+            'category', 'brand', 'price', 'keywords', 'popularity_score'
+        ))
 
         # Record search history
         self._record_search(query, query_normalized, total)

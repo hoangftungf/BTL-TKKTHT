@@ -179,6 +179,32 @@ class Guardrails:
         return False
 
 
+def apply_output_guardrails(response: str, message: str, products: list) -> str:
+    """Apply all output guardrails to the response.
+
+    - Safety check: block harmful/spam content
+    - Hallucination check: detect mentions of products not in context
+    - Citation check: ensure [ID: xxx] format for mentioned products
+    """
+    if not response:
+        return response
+
+    # 1. Safety check
+    if Guardrails.check_safety(response):
+        logger.warning("[Guardrails] Blocked unsafe response")
+        return "Xin lỗi, tôi không thể trả lời câu hỏi này."
+
+    # 2. Hallucination check
+    if Guardrails.check_hallucination(response, products):
+        logger.warning("[Guardrails] Hallucination detected in response")
+        return "Tôi không tìm thấy thông tin phù hợp để trả lời câu hỏi của bạn."
+
+    # 3. Citation check
+    response = Guardrails.check_citation(response, products)
+
+    return response
+
+
 RAG_SYSTEM_PROMPT = """Bạn là trợ lý AI của cửa hàng thương mại điện tử.
 Chỉ sử dụng thông tin trong CONTEXT dưới đây để trả lời.
 Nếu không có sản phẩm phù hợp trong context, hãy trả lời "Tôi không tìm thấy sản phẩm phù hợp".
@@ -719,7 +745,7 @@ class RAGPipeline:
             mtime = os.path.getmtime(meta_path)
             if not hasattr(self, '_last_loaded_mtime') or mtime > self._last_loaded_mtime:
                 logger.info('[RAG] FAISS Index changed on disk. Reloading in RAGPipeline...')
-                if self.vector_store.load_local(self.index_dir):
+                if self.vector_store.load(self.index_dir):
                     self._indexed = True
                     self._last_loaded_mtime = mtime
 
