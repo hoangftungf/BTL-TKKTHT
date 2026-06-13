@@ -1,24 +1,27 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { motion } from 'framer-motion';
 import { fetchFeaturedProducts, fetchCategories } from '../store/slices/productSlice';
 import ProductGrid from '../components/product/ProductGrid';
 import ProductRecommendations from '../components/product/ProductRecommendations';
 import HeroSection from '../components/layout/HeroSection';
 import { Menu } from 'antd';
-import { 
-  Smartphone, 
-  Laptop, 
-  Tablet, 
-  Watch, 
-  Trophy, 
-  Home as HomeIcon, 
-  BookOpen, 
-  Sparkles, 
-  Shirt, 
+import {
+  Smartphone,
+  Laptop,
+  Tablet,
+  Watch,
+  Trophy,
+  Home as HomeIcon,
+  BookOpen,
+  Sparkles,
+  Shirt,
   Box,
   ChevronRight
 } from 'lucide-react';
+import { staggerContainer, staggerItem, fadeInUp } from '../utils/animations';
+import ScrollReveal from '../components/common/ScrollReveal';
 
 const HomePage = () => {
   const dispatch = useDispatch();
@@ -47,32 +50,32 @@ const HomePage = () => {
 
   const menuItems = categories.map((category) => {
     const hasChildren = category.children && category.children.length > 0;
-    
+
     return {
       key: category.id,
       label: <span className="font-semibold text-gray-700 text-sm">{category.name}</span>,
       icon: getCategoryIcon(category.name),
-      children: hasChildren 
+      children: hasChildren
         ? category.children.map((child) => {
             const hasSubChildren = child.children && child.children.length > 0;
-            
+
             return {
               key: child.id,
               label: hasSubChildren ? (
                 <span className="text-xs font-semibold text-gray-800">{child.name}</span>
               ) : (
-                <Link 
+                <Link
                   to={`/products?category=${child.id}`}
                   className="text-xs text-gray-600 hover:text-blue-600 block w-full py-0.5"
                 >
                   {child.name}
                 </Link>
               ),
-              children: hasSubChildren 
+              children: hasSubChildren
                 ? child.children.map((subChild) => ({
                     key: subChild.id,
                     label: (
-                      <Link 
+                      <Link
                         to={`/products?category=${subChild.id}`}
                         className="text-xs text-gray-500 hover:text-blue-600 block w-full py-0.5"
                       >
@@ -88,11 +91,19 @@ const HomePage = () => {
   });
 
   return (
-    <div className="bg-gray-50 min-h-screen">
+    <motion.div
+      className="bg-gray-50 min-h-screen"
+      initial="hidden"
+      animate="visible"
+      variants={staggerContainer}
+    >
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex gap-6 items-start">
           {/* Sidebar */}
-          <aside className="hidden md:block w-1/5 shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <motion.aside
+            variants={fadeInUp}
+            className="hidden md:block w-1/5 shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 p-4"
+          >
             <h2 className="text-base font-bold text-gray-900 mb-4 px-2 flex items-center gap-2">
               <span className="w-1 h-4 bg-blue-600 rounded-full"></span>
               Danh mục sản phẩm
@@ -103,47 +114,55 @@ const HomePage = () => {
               className="border-none tiki-menu"
               style={{ background: 'transparent' }}
             />
-          </aside>
+          </motion.aside>
 
           {/* Main Content */}
           <div className="w-full md:w-4/5 flex-grow space-y-6">
             {/* Hero Section */}
-            <HeroSection />
+            <ScrollReveal direction="up">
+              <HeroSection />
+            </ScrollReveal>
 
             {/* Personalized Recommendations */}
             {user && (
-              <ProductRecommendations
-                type="personalized"
-                userId={user.id}
-                title="Gợi ý cho bạn"
-                limit={6}
-              />
+              <ScrollReveal direction="up" delay={0.1}>
+                <ProductRecommendations
+                  type="personalized"
+                  userId={user.id}
+                  title="Gợi ý cho bạn"
+                  limit={6}
+                />
+              </ScrollReveal>
             )}
 
             {/* Trending Products */}
-            <ProductRecommendations
-              type="trending"
-              title="Sản phẩm bán chạy"
-              limit={6}
-            />
+            <ScrollReveal direction="up" delay={0.2}>
+              <ProductRecommendations
+                type="trending"
+                title="Sản phẩm bán chạy"
+                limit={6}
+              />
+            </ScrollReveal>
 
             {/* Featured Products */}
-            <section className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                  <span className="w-1.5 h-5 bg-blue-600 rounded-full"></span>
-                  Sản phẩm nổi bật
-                </h2>
-                <Link to="/products?is_featured=true" className="text-sm font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                  Xem tất cả <ChevronRight className="w-4 h-4" />
-                </Link>
-              </div>
-              <ProductGrid products={featuredProducts} loading={featuredProducts.length === 0} />
-            </section>
+            <ScrollReveal direction="up" delay={0.3}>
+              <section className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    <span className="w-1.5 h-5 bg-blue-600 rounded-full"></span>
+                    Sản phẩm nổi bật
+                  </h2>
+                  <Link to="/products?is_featured=true" className="text-sm font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                    Xem tất cả <ChevronRight className="w-4 h-4" />
+                  </Link>
+                </div>
+                <ProductGrid products={featuredProducts} loading={featuredProducts.length === 0} />
+              </section>
+            </ScrollReveal>
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

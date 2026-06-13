@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
+import { motion, AnimatePresence } from 'framer-motion';
 import { logout } from '../../store/slices/authSlice';
 import NotificationDropdown from '../notification/NotificationDropdown';
 import {
@@ -15,6 +16,7 @@ import {
   ArrowRightOnRectangleIcon,
   ChatBubbleLeftRightIcon
 } from '@heroicons/react/24/outline';
+import { staggerContainer, staggerItem, slideInLeft, fadeInRight } from '../../utils/animations';
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -47,32 +49,47 @@ const AdminLayout = () => {
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex font-sans">
       {/* Mobile Sidebar Backdrop */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity duration-300"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Sidebar Component */}
-      <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-slate-950 border-r border-slate-800/80 flex flex-col justify-between
-        transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:h-screen
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
+      <motion.aside
+        initial={false}
+        animate={{
+          x: sidebarOpen ? 0 : 0,
+        }}
+        className={`
+          fixed inset-y-0 left-0 z-50 w-64 bg-slate-950 border-r border-slate-800/80 flex flex-col justify-between
+          transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:h-screen
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        `}
+      >
         {/* Sidebar Header */}
         <div>
           <div className="h-16 flex items-center justify-between px-6 border-b border-slate-800/80">
             <Link to="/admin-dashboard" className="flex items-center space-x-2.5">
-              <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-600/30">
+              <motion.div
+                className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-600/30"
+                whileHover={{ scale: 1.05, rotate: -3 }}
+              >
                 <span className="text-white font-extrabold text-lg">AI</span>
-              </div>
+              </motion.div>
               <div>
                 <span className="text-base font-bold text-white tracking-wider block">ADMIN PANEL</span>
                 <span className="text-[10px] text-slate-500 font-semibold block -mt-1">E-Commerce System</span>
               </div>
             </Link>
-            <button 
+            <button
               className="lg:hidden p-1 rounded-md text-slate-400 hover:text-white focus:outline-none"
               onClick={() => setSidebarOpen(false)}
             >
@@ -81,36 +98,52 @@ const AdminLayout = () => {
           </div>
 
           {/* Sidebar Menu Items */}
-          <nav className="mt-6 px-4 space-y-1.5">
+          <motion.nav
+            className="mt-6 px-4 space-y-1.5"
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+          >
             {menuItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.path);
               return (
-                <Link
-                  key={item.name}
-                  to={item.path}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`
-                    flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200
-                    ${active 
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' 
-                      : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'}
-                  `}
-                >
-                  <Icon className={`w-5 h-5 flex-shrink-0 ${active ? 'text-white' : 'text-slate-400'}`} />
-                  <span>{item.name}</span>
-                </Link>
+                <motion.div key={item.name} variants={staggerItem}>
+                  <Link
+                    to={item.path}
+                    onClick={() => setSidebarOpen(false)}
+                    className={`
+                      flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 relative
+                      ${active
+                        ? 'text-white'
+                        : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'}
+                    `}
+                  >
+                    {active && (
+                      <motion.div
+                        layoutId="activeIndicator"
+                        className="absolute inset-0 bg-indigo-600 rounded-xl shadow-md shadow-indigo-600/20"
+                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                      />
+                    )}
+                    <Icon className={`w-5 h-5 flex-shrink-0 relative z-10 ${active ? 'text-white' : 'text-slate-400'}`} />
+                    <span className="relative z-10">{item.name}</span>
+                  </Link>
+                </motion.div>
               );
             })}
-          </nav>
+          </motion.nav>
         </div>
 
         {/* Sidebar Footer */}
         <div className="p-4 border-t border-slate-800/80">
           <div className="flex items-center space-x-3 p-2 rounded-lg bg-slate-900/60 mb-3">
-            <div className="w-9 h-9 bg-slate-800 rounded-full flex items-center justify-center font-bold text-indigo-400 border border-slate-700">
+            <motion.div
+              className="w-9 h-9 bg-slate-800 rounded-full flex items-center justify-center font-bold text-indigo-400 border border-slate-700"
+              whileHover={{ scale: 1.1 }}
+            >
               {user?.username?.substring(0, 2).toUpperCase() || 'AD'}
-            </div>
+            </motion.div>
             <div className="flex-grow min-w-0">
               <p className="text-xs font-semibold text-white truncate">{user?.username || 'Administrator'}</p>
               <p className="text-[10px] text-slate-500 capitalize truncate font-medium">{user?.role || 'Admin'}</p>
@@ -133,7 +166,7 @@ const AdminLayout = () => {
             <span>Đăng xuất</span>
           </button>
         </div>
-      </aside>
+      </motion.aside>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto h-screen">
@@ -153,10 +186,8 @@ const AdminLayout = () => {
 
           {/* Header Controls */}
           <div className="flex items-center space-x-4">
-            {/* Notifications */}
             <NotificationDropdown theme="dark" />
 
-            {/* Profile */}
             <div className="h-8 w-px bg-slate-800"></div>
             <div className="flex items-center space-x-2">
               <span className="text-xs font-medium text-slate-300 hidden md:block">{user?.email || 'admin@ecommerce.com'}</span>
@@ -168,9 +199,14 @@ const AdminLayout = () => {
         </header>
 
         {/* Outlet for Inner Pages */}
-        <main className="flex-1 p-6 md:p-8 bg-slate-900">
+        <motion.main
+          className="flex-1 p-6 md:p-8 bg-slate-900"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
           <Outlet />
-        </main>
+        </motion.main>
       </div>
     </div>
   );

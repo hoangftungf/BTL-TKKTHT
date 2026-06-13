@@ -1,7 +1,9 @@
+import { motion, AnimatePresence } from 'framer-motion';
 import ProductCard from './ProductCard';
 import Loading from '../common/Loading';
 import Empty from '../common/Empty';
 import { CubeIcon } from '@heroicons/react/24/outline';
+import { staggerContainer, staggerItem } from '../../utils/animations';
 
 const ProductGrid = ({ products, loading, emptyMessage = 'Không tìm thấy sản phẩm' }) => {
   if (loading) {
@@ -19,11 +21,26 @@ const ProductGrid = ({ products, loading, emptyMessage = 'Không tìm thấy s�
   }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-      {products.map((product) => (
-        <ProductCard key={product.id} product={product} />
-      ))}
-    </div>
+    <motion.div
+      className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
+      variants={staggerContainer}
+      initial="hidden"
+      animate="visible"
+      layout
+    >
+      <AnimatePresence mode="popLayout">
+        {products.map((product) => (
+          <motion.div
+            key={product.id}
+            variants={staggerItem}
+            layout
+            exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+          >
+            <ProductCard product={product} />
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </motion.div>
   );
 };
 

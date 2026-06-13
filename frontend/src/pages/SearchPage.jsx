@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
+import { motion } from 'framer-motion';
 import { searchService } from '../services/aiService';
 import productService from '../services/productService';
 import ProductGrid from '../components/product/ProductGrid';
 import ProductRecommendations from '../components/product/ProductRecommendations';
+import { fadeInUp, staggerContainer, staggerItem } from '../utils/animations';
 
 const SearchPage = () => {
   const [searchParams] = useSearchParams();
@@ -27,7 +29,6 @@ const SearchPage = () => {
         const response = await searchService.search(query);
         const results = response.data.results || [];
 
-        // Map results to product format
         const mappedProducts = results.map((r) => ({
           id: r.product_id,
           name: r.name,
@@ -69,7 +70,6 @@ const SearchPage = () => {
     const fetchCategories = async () => {
       try {
         const data = await productService.getCategories();
-        // Lấy 6 danh mục đầu tiên làm danh mục nổi bật
         setCategories(data.slice(0, 6));
       } catch (error) {
         console.error('Error fetching categories:', error);
@@ -79,43 +79,89 @@ const SearchPage = () => {
   }, []);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">
+    <motion.div
+      className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+      variants={staggerContainer}
+      initial="hidden"
+      animate="visible"
+    >
+      <motion.h1 variants={staggerItem} className="text-2xl font-bold text-gray-900 mb-2">
         Kết quả tìm kiếm
-      </h1>
-      <p className="text-gray-500 mb-4">
+      </motion.h1>
+      <motion.p variants={staggerItem} className="text-gray-500 mb-4">
         {total} kết quả cho "{query}"
-      </p>
+      </motion.p>
 
       {suggestions.length > 0 && (
-        <div className="mb-6">
+        <motion.div variants={staggerItem} className="mb-6">
           <p className="text-sm text-gray-500 mb-2">Gợi ý tìm kiếm:</p>
-          <div className="flex flex-wrap gap-2">
+          <motion.div className="flex flex-wrap gap-2" variants={staggerContainer} initial="hidden" animate="visible">
             {suggestions.map((s, index) => (
-              <a
+              <motion.a
                 key={index}
                 href={`/search?q=${encodeURIComponent(s.text)}`}
                 className="px-3 py-1 bg-gray-100 rounded-full text-sm text-gray-700 hover:bg-gray-200"
+                variants={staggerItem}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
                 {s.text}
-              </a>
+              </motion.a>
             ))}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
 
       {/* Main search results or Zero-Result State */}
       {!loading && products.length === 0 ? (
-        <div className="my-12 flex flex-col items-center justify-center text-center p-8 bg-gradient-to-b from-slate-50 to-white rounded-3xl border border-gray-100 shadow-sm max-w-3xl mx-auto">
-          {/* SVG Illustration dễ thương cho Empty State */}
-          <div className="w-40 h-40 mb-6 text-indigo-500 animate-bounce" style={{ animationDuration: '3s' }}>
+        <motion.div
+          variants={fadeInUp}
+          className="my-12 flex flex-col items-center justify-center text-center p-8 bg-gradient-to-b from-slate-50 to-white rounded-3xl border border-gray-100 shadow-sm max-w-3xl mx-auto"
+        >
+          {/* SVG Illustration with draw animation */}
+          <motion.div
+            className="w-40 h-40 mb-6 text-indigo-500"
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+          >
             <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-              <circle cx="100" cy="100" r="80" fill="url(#paint0_linear)" fillOpacity="0.1" />
-              <path d="M140 140L120 120" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
-              <circle cx="95" cy="95" r="35" stroke="currentColor" strokeWidth="6" />
-              <circle cx="85" cy="85" r="4" fill="currentColor" />
-              <circle cx="105" cy="85" r="4" fill="currentColor" />
-              <path d="M90 108C92.5 104 97.5 104 100 108" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+              <motion.circle
+                cx="100" cy="100" r="80"
+                fill="url(#paint0_linear)" fillOpacity="0.1"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ duration: 0.4, delay: 0.2 }}
+              />
+              <motion.path
+                d="M140 140L120 120"
+                stroke="currentColor" strokeWidth="6" strokeLinecap="round"
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{ duration: 0.3, delay: 0.4 }}
+              />
+              <motion.circle
+                cx="95" cy="95" r="35"
+                stroke="currentColor" strokeWidth="6"
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{ duration: 0.4, delay: 0.3 }}
+              />
+              <motion.circle cx="85" cy="85" r="4" fill="currentColor"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6 }} />
+              <motion.circle cx="105" cy="105" r="4" fill="currentColor"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.65 }} />
+              <motion.path
+                d="M90 108C92.5 104 97.5 104 100 108"
+                stroke="currentColor" strokeWidth="4" strokeLinecap="round"
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{ duration: 0.3, delay: 0.7 }}
+              />
               <defs>
                 <linearGradient id="paint0_linear" x1="20" y1="20" x2="180" y2="180" gradientUnits="userSpaceOnUse">
                   <stop stopColor="#6366F1" />
@@ -123,43 +169,69 @@ const SearchPage = () => {
                 </linearGradient>
               </defs>
             </svg>
-          </div>
+          </motion.div>
 
-          <h2 className="text-xl font-bold text-gray-900 mb-2">
+          <motion.h2
+            className="text-xl font-bold text-gray-900 mb-2"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
             Rất tiếc, không tìm thấy kết quả phù hợp cho "{query}"
-          </h2>
-          <p className="text-gray-500 max-w-md mb-6 text-sm">
+          </motion.h2>
+          <motion.p
+            className="text-gray-500 max-w-md mb-6 text-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+          >
             Chúng tôi đã tìm kiếm kỹ lưỡng nhưng chưa thấy sản phẩm nào phù hợp. Bạn hãy thử kiểm tra lại từ khóa hoặc tham khảo các gợi ý dưới đây nhé!
-          </p>
+          </motion.p>
 
-          {/* Gợi ý sửa lỗi */}
-          <div className="bg-slate-50 rounded-2xl p-5 text-left w-full mb-8 border border-slate-100/80">
+          <motion.div
+            className="bg-slate-50 rounded-2xl p-5 text-left w-full mb-8 border border-slate-100/80"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
+          >
             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Mẹo tìm kiếm:</h4>
             <ul className="text-xs text-slate-500 space-y-1.5 list-disc list-inside">
               <li>Kiểm tra lại xem từ khóa đã gõ đúng chính tả chưa.</li>
               <li>Thử các từ khóa chung chung hơn (ví dụ: gõ "giày" thay cho "giày sneaker thể thao nam cao cấp").</li>
               <li>Sử dụng các cụm từ đồng nghĩa phổ biến (ví dụ: "smartphone" thay vì "điện thoại").</li>
             </ul>
-          </div>
+          </motion.div>
 
-          {/* Danh mục nổi bật */}
           {categories.length > 0 && (
-            <div className="w-full">
+            <motion.div
+              className="w-full"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.7 }}
+            >
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 text-center">Khám phá các danh mục bán chạy</h4>
-              <div className="flex flex-wrap justify-center gap-2">
+              <motion.div
+                className="flex flex-wrap justify-center gap-2"
+                variants={staggerContainer}
+                initial="hidden"
+                animate="visible"
+              >
                 {categories.map((cat) => (
-                  <a
+                  <motion.a
                     key={cat.id}
                     href={`/products?category=${cat.id}`}
-                    className="px-4 py-2 bg-white hover:bg-indigo-50 border border-gray-200 hover:border-indigo-300 rounded-xl text-xs font-semibold text-gray-700 hover:text-indigo-600 shadow-sm transition-all duration-200 hover:-translate-y-0.5"
+                    className="px-4 py-2 bg-white hover:bg-indigo-50 border border-gray-200 hover:border-indigo-300 rounded-xl text-xs font-semibold text-gray-700 hover:text-indigo-600 shadow-sm transition-all duration-200"
+                    variants={staggerItem}
+                    whileHover={{ y: -2, scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
                   >
                     {cat.name}
-                  </a>
+                  </motion.a>
                 ))}
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           )}
-        </div>
+        </motion.div>
       ) : (
         <ProductGrid
           products={products}
@@ -168,9 +240,8 @@ const SearchPage = () => {
         />
       )}
 
-      {/* AI Recommendations - luôn render để níu kéo khách hàng */}
+      {/* AI Recommendations */}
       <div className="mt-12 border-t border-gray-200">
-        {/* Gợi ý cá nhân hóa nếu đăng nhập */}
         {isAuthenticated && user?.id && (
           <ProductRecommendations
             userId={user.id}
@@ -180,14 +251,13 @@ const SearchPage = () => {
           />
         )}
 
-        {/* Sản phẩm xu hướng phổ biến */}
         <ProductRecommendations
           type="trending"
           title="Xu hướng mua sắm nổi bật"
           limit={6}
         />
       </div>
-    </div>
+    </motion.div>
   );
 };
 

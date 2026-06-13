@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { motion, AnimatePresence } from 'framer-motion';
 import { createOrder } from '../store/slices/orderSlice';
 import { resetCart } from '../store/slices/cartSlice';
 import { formatPrice } from '../utils/format';
@@ -8,6 +9,7 @@ import userService from '../services/userService';
 import AddressForm from '../components/address/AddressForm';
 import toast from 'react-hot-toast';
 import { PlusIcon, MapPinIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { staggerContainer, staggerItem } from '../utils/animations';
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
@@ -60,7 +62,6 @@ const CheckoutPage = () => {
       const data = await userService.getAddresses();
       setAddresses(data);
 
-      // Auto-select default address
       const defaultAddr = data.find(addr => addr.is_default);
       if (defaultAddr) {
         selectAddress(defaultAddr);
@@ -134,28 +135,35 @@ const CheckoutPage = () => {
   const total = checkoutTotalAmount + shippingFee;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-8">Thanh toán</h1>
+    <motion.div
+      className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+      variants={staggerContainer}
+      initial="hidden"
+      animate="visible"
+    >
+      <motion.h1 variants={staggerItem} className="text-2xl font-bold text-gray-900 mb-8">Thanh toán</motion.h1>
 
       <form onSubmit={handleSubmit}>
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Shipping Info */}
           <div className="lg:col-span-2 space-y-6">
             {/* Address Selection */}
-            <div className="card p-6">
+            <motion.div variants={staggerItem} className="card p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-900 flex items-center">
                   <MapPinIcon className="w-5 h-5 mr-2 text-primary-600" />
                   Địa chỉ giao hàng
                 </h2>
-                <button
+                <motion.button
                   type="button"
                   onClick={() => setShowAddForm(!showAddForm)}
                   className="flex items-center text-primary-600 hover:text-primary-700 text-sm font-medium"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                 >
                   <PlusIcon className="w-4 h-4 mr-1" />
                   Thêm địa chỉ mới
-                </button>
+                </motion.button>
               </div>
 
               {loadingAddresses ? (
@@ -164,16 +172,24 @@ const CheckoutPage = () => {
                 <>
                   {/* Saved Addresses */}
                   {addresses.length > 0 && !showAddForm && (
-                    <div className="space-y-3 mb-4">
+                    <motion.div
+                      className="space-y-3 mb-4"
+                      variants={staggerContainer}
+                      initial="hidden"
+                      animate="visible"
+                    >
                       {addresses.map((address) => (
-                        <div
+                        <motion.div
                           key={address.id}
+                          variants={staggerItem}
                           onClick={() => selectAddress(address)}
                           className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
                             selectedAddressId === address.id
                               ? 'border-primary-500 bg-primary-50'
                               : 'border-gray-200 hover:border-gray-300'
                           }`}
+                          whileHover={{ scale: 1.002 }}
+                          whileTap={{ scale: 0.998 }}
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-grow">
@@ -194,13 +210,22 @@ const CheckoutPage = () => {
                                 {address.street_address}, {address.ward}, {address.district}, {address.province}
                               </p>
                             </div>
-                            {selectedAddressId === address.id && (
-                              <CheckIcon className="w-6 h-6 text-primary-600 flex-shrink-0" />
-                            )}
+                            <AnimatePresence>
+                              {selectedAddressId === address.id && (
+                                <motion.div
+                                  initial={{ scale: 0 }}
+                                  animate={{ scale: 1 }}
+                                  exit={{ scale: 0 }}
+                                  transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                                >
+                                  <CheckIcon className="w-6 h-6 text-primary-600 flex-shrink-0" />
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
-                        </div>
+                        </motion.div>
                       ))}
-                    </div>
+                    </motion.div>
                   )}
 
                   {/* No addresses message */}
@@ -219,23 +244,31 @@ const CheckoutPage = () => {
                   )}
 
                   {/* Add New Address Form */}
-                  {showAddForm && (
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-gray-50">
-                      <h3 className="font-medium text-gray-900 mb-4">Thêm địa chỉ mới</h3>
-                      <AddressForm
-                        onSubmit={handleAddAddress}
-                        onCancel={() => setShowAddForm(false)}
-                        saving={savingAddress}
-                        submitText="Lưu và sử dụng địa chỉ này"
-                      />
-                    </div>
-                  )}
+                  <AnimatePresence>
+                    {showAddForm && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-gray-50 overflow-hidden"
+                      >
+                        <h3 className="font-medium text-gray-900 mb-4">Thêm địa chỉ mới</h3>
+                        <AddressForm
+                          onSubmit={handleAddAddress}
+                          onCancel={() => setShowAddForm(false)}
+                          saving={savingAddress}
+                          submitText="Lưu và sử dụng địa chỉ này"
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </>
               )}
-            </div>
+            </motion.div>
 
             {/* Note */}
-            <div className="card p-6">
+            <motion.div variants={staggerItem} className="card p-6">
               <label className="block text-sm font-medium text-gray-700 mb-1">Ghi chú cho đơn hàng</label>
               <textarea
                 name="note"
@@ -245,10 +278,10 @@ const CheckoutPage = () => {
                 rows="2"
                 placeholder="Ví dụ: Giao hàng giờ hành chính..."
               />
-            </div>
+            </motion.div>
 
             {/* Payment Method */}
-            <div className="card p-6">
+            <motion.div variants={staggerItem} className="card p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Phương thức thanh toán</h2>
 
               <div className="space-y-3">
@@ -257,13 +290,15 @@ const CheckoutPage = () => {
                   { value: 'momo', label: 'Ví MoMo', icon: '📱' },
                   { value: 'vnpay', label: 'VNPay', icon: '💳' },
                 ].map((method) => (
-                  <label
+                  <motion.label
                     key={method.value}
                     className={`flex items-center p-4 border rounded-lg cursor-pointer transition-all ${
                       formData.payment_method === method.value
                         ? 'border-primary-500 bg-primary-50'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
+                    whileHover={{ scale: 1.002 }}
+                    whileTap={{ scale: 0.998 }}
                   >
                     <input
                       type="radio"
@@ -275,20 +310,26 @@ const CheckoutPage = () => {
                     />
                     <span className="mr-3 text-2xl">{method.icon}</span>
                     <span className="font-medium">{method.label}</span>
-                  </label>
+                  </motion.label>
                 ))}
               </div>
-            </div>
+            </motion.div>
           </div>
 
           {/* Order Summary */}
-          <div className="lg:col-span-1">
+          <motion.div variants={staggerItem} className="lg:col-span-1">
             <div className="card p-6 sticky top-24">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Đơn hàng của bạn</h2>
 
               <div className="space-y-3 border-b border-gray-200 pb-4 mb-4 max-h-64 overflow-y-auto">
                 {checkoutItems.map((item) => (
-                  <div key={item.id} className="flex items-center space-x-3">
+                  <motion.div
+                    key={item.id}
+                    className="flex items-center space-x-3"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
                     <div className="w-16 h-16 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
                       <img src={item.product_image || '/placeholder.png'} alt="" className="w-full h-full object-cover" />
                     </div>
@@ -297,7 +338,7 @@ const CheckoutPage = () => {
                       <p className="text-sm text-gray-500">x{item.quantity}</p>
                     </div>
                     <span className="text-sm font-medium">{formatPrice(item.subtotal)}</span>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
 
@@ -317,13 +358,15 @@ const CheckoutPage = () => {
                 <span className="text-red-600">{formatPrice(total)}</span>
               </div>
 
-              <button
+              <motion.button
                 type="submit"
                 disabled={loading || !selectedAddressId}
                 className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                whileHover={!loading && selectedAddressId ? { scale: 1.01 } : undefined}
+                whileTap={!loading && selectedAddressId ? { scale: 0.99 } : undefined}
               >
                 {loading ? 'Đang xử lý...' : 'Đặt hàng'}
-              </button>
+              </motion.button>
 
               {!selectedAddressId && (
                 <p className="text-sm text-red-500 text-center mt-2">
@@ -331,10 +374,10 @@ const CheckoutPage = () => {
                 </p>
               )}
             </div>
-          </div>
+          </motion.div>
         </div>
       </form>
-    </div>
+    </motion.div>
   );
 };
 

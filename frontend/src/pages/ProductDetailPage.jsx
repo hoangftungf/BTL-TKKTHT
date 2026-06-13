@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { motion, AnimatePresence } from 'framer-motion';
 import { fetchProductById, clearCurrentProduct } from '../store/slices/productSlice';
 import { addToCart } from '../store/slices/cartSlice';
 import { addToWishlist, removeFromWishlist } from '../store/slices/wishlistSlice';
@@ -13,6 +14,7 @@ import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
 import { formatPrice } from '../utils/format';
 import toast from 'react-hot-toast';
 import reviewService from '../services/reviewService';
+import { staggerContainer, staggerItem, fadeInUp } from '../utils/animations';
 
 const ProductDetailPage = () => {
   const { id } = useParams();
@@ -27,6 +29,7 @@ const ProductDetailPage = () => {
   const [reviews, setReviews] = useState([]);
   const [reviewStats, setReviewStats] = useState(null);
   const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [priceFlash, setPriceFlash] = useState(false);
 
   const toggleTab = (tabName) => {
     setActiveTab(prev => prev === tabName ? null : tabName);
@@ -94,12 +97,21 @@ const ProductDetailPage = () => {
     }
   }, [selectedAttributes, product]);
 
+  // Flash price when variant changes
+  useEffect(() => {
+    if (selectedVariant) {
+      setPriceFlash(true);
+      const timer = setTimeout(() => setPriceFlash(false), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedVariant?.price]);
+
   // Sync selected image with selected variant color
   useEffect(() => {
     if (selectedVariant && product && product.images) {
       const color = selectedVariant.attributes?.color || selectedVariant.attributes?.['Màu sắc'] || selectedVariant.attributes?.['Màu'];
       if (color) {
-        const matchingImgIndex = product.images.findIndex(img => 
+        const matchingImgIndex = product.images.findIndex(img =>
           img.alt_text && img.alt_text.toLowerCase().includes(color.toLowerCase())
         );
         if (matchingImgIndex !== -1) {
@@ -165,7 +177,7 @@ const ProductDetailPage = () => {
       .unwrap()
       .then(() => {
         toast.success('Đã thêm vào giỏ hàng');
-        dispatch(setCartDrawerOpen(true)); // Auto-open cart drawer
+        dispatch(setCartDrawerOpen(true));
       })
       .catch((err) => toast.error(err));
   };
@@ -183,7 +195,7 @@ const ProductDetailPage = () => {
     dispatch(addToCart({ productId: product.id, quantity, variantId }))
       .unwrap()
       .then(() => {
-        dispatch(setCartDrawerOpen(true)); // Auto-open cart drawer
+        dispatch(setCartDrawerOpen(true));
       })
       .catch((err) => toast.error(err));
   };
@@ -211,10 +223,10 @@ const ProductDetailPage = () => {
   }
 
   const images = product.images?.length > 0 ? product.images : [{ image: '/placeholder.png' }];
-  
+
   const displayPrice = selectedVariant ? Number(selectedVariant.price) : Number(product.price);
-  const displayComparePrice = selectedVariant 
-    ? (Number(selectedVariant.price) < Number(product.price) ? Number(product.price) : Number(product.compare_price)) 
+  const displayComparePrice = selectedVariant
+    ? (Number(selectedVariant.price) < Number(product.price) ? Number(product.price) : Number(product.compare_price))
     : Number(product.compare_price);
   const hasDiscount = displayComparePrice && displayComparePrice > displayPrice;
   const discountPercent = hasDiscount ? Math.round(((displayComparePrice - displayPrice) / displayComparePrice) * 100) : 0;
@@ -222,9 +234,14 @@ const ProductDetailPage = () => {
   const displaySku = selectedVariant ? selectedVariant.sku : product.sku;
 
   return (
-    <div className="bg-slate-50 min-h-screen pb-12">
+    <motion.div
+      className="bg-slate-50 min-h-screen pb-12"
+      initial="hidden"
+      animate="visible"
+      variants={staggerContainer}
+    >
       {/* Breadcrumb */}
-      <div className="bg-white border-b border-slate-100">
+      <motion.div variants={staggerItem} className="bg-white border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-1.5 text-xs text-slate-500">
           <Link to="/" className="hover:text-sky-400 transition-colors">Trang chủ</Link>
           <ChevronRightIcon className="w-3 h-3 text-slate-400" />
@@ -236,60 +253,71 @@ const ProductDetailPage = () => {
           )}
           <span className="text-slate-800 font-medium line-clamp-1 max-w-[400px]">{product.name}</span>
         </div>
-      </div>
+      </motion.div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Main Grid: 2 Columns */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start mb-12">
-          
+        <motion.div
+          className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start mb-12"
+          variants={staggerContainer}
+        >
           {/* ===== CỘT TRÁI: GALLERY HÌNH ẢNH (Sticky) ===== */}
-          <div className="lg:col-span-7 lg:sticky lg:top-24 space-y-4">
+          <motion.div variants={staggerItem} className="lg:col-span-7 lg:sticky lg:top-24 space-y-4">
             <div className="relative aspect-square rounded-lg overflow-hidden bg-white border border-slate-100 flex items-center justify-center shadow-custom-smooth">
-              <img
-                src={mainImgFailed ? '/placeholder.png' : (images[selectedImage]?.image || '/placeholder.png')}
-                alt={product.name}
-                className="w-full h-full object-contain p-4 transition-transform duration-500 hover:scale-102"
-                onError={() => setMainImgFailed(true)}
-              />
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={selectedImage}
+                  src={mainImgFailed ? '/placeholder.png' : (images[selectedImage]?.image || '/placeholder.png')}
+                  alt={product.name}
+                  className="w-full h-full object-contain p-4"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.05 }}
+                  transition={{ duration: 0.25 }}
+                  onError={() => setMainImgFailed(true)}
+                />
+              </AnimatePresence>
               {hasDiscount && (
                 <div className="absolute top-4 left-4 bg-red-500 text-white text-xs font-bold px-2.5 py-1 rounded">
                   -{discountPercent}%
                 </div>
               )}
-              {/* Wishlist button */}
-              <button
+              <motion.button
                 onClick={handleToggleWishlist}
-                className="absolute top-4 right-4 w-10 h-10 bg-white rounded-full shadow-custom-smooth border border-slate-100 flex items-center justify-center hover:scale-110 transition-transform active:scale-95 z-10"
+                className="absolute top-4 right-4 w-10 h-10 bg-white rounded-full shadow-custom-smooth border border-slate-100 flex items-center justify-center z-10"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
               >
                 {isInWishlist
                   ? <HeartSolid className="w-5 h-5 text-red-500" />
                   : <HeartOutline className="w-5 h-5 text-slate-400" />
                 }
-              </button>
+              </motion.button>
             </div>
 
             {/* Thumbnails */}
             {images.length > 1 && (
               <div className="flex gap-3 overflow-x-auto py-1 scrollbar-none">
                 {images.map((img, idx) => (
-                  <button
+                  <motion.button
                     key={idx}
                     onClick={() => { setSelectedImage(idx); setMainImgFailed(false); }}
                     className={`w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-white border-2 transition-all p-1 flex items-center justify-center ${
                       selectedImage === idx
-                        ? 'border-slate-900 scale-102 shadow-sm'
+                        ? 'border-slate-900 shadow-sm'
                         : 'border-slate-200 hover:border-slate-400'
                     }`}
+                    whileTap={{ scale: 0.95 }}
                   >
                     <img src={failedThumbnails[idx] ? '/placeholder.png' : (img.image || '/placeholder.png')} alt="" className="w-full h-full object-contain" onError={() => setFailedThumbnails(prev => ({ ...prev, [idx]: true }))} />
-                  </button>
+                  </motion.button>
                 ))}
               </div>
             )}
-          </div>
+          </motion.div>
 
           {/* ===== CỘT PHẢI: THÔNG TIN & CHỐT SALE ===== */}
-          <div className="lg:col-span-5 space-y-6">
+          <motion.div variants={staggerItem} className="lg:col-span-5 space-y-6">
             {/* Badges */}
             <div className="flex flex-wrap items-center gap-2">
               {product.brand && (
@@ -334,9 +362,20 @@ const ProductDetailPage = () => {
             </div>
 
             {/* Price Block */}
-            <div className="border-t border-b border-slate-100 py-6">
+            <motion.div
+              className="border-t border-b border-slate-100 py-6"
+              animate={priceFlash ? { backgroundColor: '#f0fdf4' } : { backgroundColor: 'transparent' }}
+              transition={{ duration: 0.3 }}
+            >
               <div className="flex items-baseline gap-4 flex-wrap">
-                <span className="text-4xl font-bold text-slate-900">{formatPrice(displayPrice)}</span>
+                <motion.span
+                  key={displayPrice}
+                  initial={{ scale: 1.05, color: '#16a34a' }}
+                  animate={{ scale: 1, color: '#0f172a' }}
+                  className="text-4xl font-bold text-slate-900"
+                >
+                  {formatPrice(displayPrice)}
+                </motion.span>
                 {hasDiscount && (
                   <>
                     <span className="text-lg text-slate-400 line-through">{formatPrice(displayComparePrice)}</span>
@@ -351,7 +390,7 @@ const ProductDetailPage = () => {
                   SKU: <span className="font-mono">{displaySku}</span>
                 </div>
               )}
-            </div>
+            </motion.div>
 
             {/* Chọn Biến Thể */}
             {product.variants && product.variants.length > 0 && (
@@ -366,7 +405,7 @@ const ProductDetailPage = () => {
                         const isSelected = selectedAttributes[key] === val;
                         const isAvailable = isOptionAvailable(key, val);
                         return (
-                          <button
+                          <motion.button
                             key={val}
                             disabled={!isAvailable}
                             onClick={() => setSelectedAttributes(prev => ({ ...prev, [key]: val }))}
@@ -377,9 +416,10 @@ const ProductDetailPage = () => {
                                 ? 'border-slate-200 bg-white text-slate-600 hover:border-slate-400'
                                 : 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed line-through'
                             }`}
+                            whileTap={isAvailable ? { scale: 0.95 } : undefined}
                           >
                             {val}
-                          </button>
+                          </motion.button>
                         );
                       })}
                     </div>
@@ -394,21 +434,28 @@ const ProductDetailPage = () => {
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Số lượng:</label>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center border border-slate-200 rounded-md bg-white">
-                    <button
+                    <motion.button
                       onClick={() => setQuantity(Math.max(1, quantity - 1))}
                       className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors"
+                      whileTap={{ scale: 0.9 }}
                     >
                       <MinusIcon className="w-4 h-4" />
-                    </button>
-                    <span className="w-12 text-center text-sm font-semibold text-slate-800 select-none">
+                    </motion.button>
+                    <motion.span
+                      key={quantity}
+                      initial={{ scale: 1.3 }}
+                      animate={{ scale: 1 }}
+                      className="w-12 text-center text-sm font-semibold text-slate-800 select-none"
+                    >
                       {quantity}
-                    </span>
-                    <button
+                    </motion.span>
+                    <motion.button
                       onClick={() => setQuantity(Math.min(displayStock || 99, quantity + 1))}
                       className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors"
+                      whileTap={{ scale: 0.9 }}
                     >
                       <PlusIcon className="w-4 h-4" />
-                    </button>
+                    </motion.button>
                   </div>
                   <span className="text-xs text-slate-400">({displayStock} sản phẩm có sẵn)</span>
                 </div>
@@ -417,26 +464,29 @@ const ProductDetailPage = () => {
 
             {/* CTA Buttons */}
             <div className="space-y-3 pt-2">
-              <button
+              <motion.button
                 onClick={handleAddToCart}
                 disabled={displayStock <= 0}
-                className="w-full h-14 bg-slate-900 text-white rounded-md text-lg font-medium hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 active:bg-slate-950 disabled:bg-slate-200 disabled:cursor-not-allowed disabled:text-slate-400 shadow-custom-smooth"
+                className="w-full h-14 bg-slate-900 text-white rounded-md text-lg font-medium hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 disabled:bg-slate-200 disabled:cursor-not-allowed disabled:text-slate-400 shadow-custom-smooth"
+                whileHover={displayStock > 0 ? { scale: 1.01 } : undefined}
+                whileTap={displayStock > 0 ? { scale: 0.99 } : undefined}
               >
                 <ShoppingCartIcon className="w-5 h-5" />
                 Thêm vào giỏ hàng
-              </button>
-              <button
+              </motion.button>
+              <motion.button
                 onClick={handleBuyNow}
                 disabled={displayStock <= 0}
-                className="w-full h-14 bg-white border-2 border-slate-900 text-slate-900 rounded-md text-lg font-medium hover:bg-slate-50 transition-colors active:bg-slate-100 disabled:border-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+                className="w-full h-14 bg-white border-2 border-slate-900 text-slate-900 rounded-md text-lg font-medium hover:bg-slate-50 transition-colors disabled:border-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
+                whileHover={displayStock > 0 ? { scale: 1.01 } : undefined}
+                whileTap={displayStock > 0 ? { scale: 0.99 } : undefined}
               >
                 Mua ngay
-              </button>
+              </motion.button>
             </div>
 
             {/* Accordion Thông tin phụ */}
             <div className="border-t border-slate-100 pt-6">
-              {/* Tab 1: Mô tả sản phẩm */}
               {product.description && (
                 <div className="border-b border-slate-100 py-3.5">
                   <button
@@ -446,13 +496,22 @@ const ProductDetailPage = () => {
                     <span>Mô tả sản phẩm</span>
                     <span className="text-base text-slate-400">{activeTab === 'desc' ? '—' : '+'}</span>
                   </button>
-                  <div className={`mt-3 text-slate-500 text-sm leading-relaxed whitespace-pre-line overflow-hidden transition-all duration-300 ${activeTab === 'desc' ? 'max-h-96 overflow-y-auto' : 'max-h-0'}`}>
-                    {product.description}
-                  </div>
+                  <motion.div
+                    initial={false}
+                    animate={{
+                      height: activeTab === 'desc' ? 'auto' : 0,
+                      opacity: activeTab === 'desc' ? 1 : 0,
+                    }}
+                    transition={{ duration: 0.3, ease: 'easeInOut' }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-3 text-slate-500 text-sm leading-relaxed whitespace-pre-line max-h-96 overflow-y-auto">
+                      {product.description}
+                    </div>
+                  </motion.div>
                 </div>
               )}
 
-              {/* Tab 2: Thông số kỹ thuật */}
               {product.specifications && Object.keys(product.specifications).length > 0 && (
                 <div className="border-b border-slate-100 py-3.5">
                   <button
@@ -462,22 +521,31 @@ const ProductDetailPage = () => {
                     <span>Thông số kỹ thuật</span>
                     <span className="text-base text-slate-400">{activeTab === 'specs' ? '—' : '+'}</span>
                   </button>
-                  <div className={`mt-3 overflow-hidden transition-all duration-300 ${activeTab === 'specs' ? 'max-h-96' : 'max-h-0'}`}>
-                    <table className="w-full text-sm text-left text-slate-500 border border-slate-100 rounded-lg overflow-hidden">
-                      <tbody>
-                        {Object.entries(product.specifications).map(([key, val], idx) => (
-                          <tr key={key} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                            <td className="px-4 py-2.5 font-medium text-slate-700 w-1/3 border-b border-slate-100">{key}</td>
-                            <td className="px-4 py-2.5 text-slate-600 border-b border-slate-100">{String(val)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <motion.div
+                    initial={false}
+                    animate={{
+                      height: activeTab === 'specs' ? 'auto' : 0,
+                      opacity: activeTab === 'specs' ? 1 : 0,
+                    }}
+                    transition={{ duration: 0.3, ease: 'easeInOut' }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-3">
+                      <table className="w-full text-sm text-left text-slate-500 border border-slate-100 rounded-lg overflow-hidden">
+                        <tbody>
+                          {Object.entries(product.specifications).map(([key, val], idx) => (
+                            <tr key={key} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                              <td className="px-4 py-2.5 font-medium text-slate-700 w-1/3 border-b border-slate-100">{key}</td>
+                              <td className="px-4 py-2.5 text-slate-600 border-b border-slate-100">{String(val)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </motion.div>
                 </div>
               )}
 
-              {/* Tab 3: Thông tin vận chuyển & bảo hành */}
               <div className="border-b border-slate-100 py-3.5">
                 <button
                   onClick={() => toggleTab('shipping')}
@@ -486,32 +554,44 @@ const ProductDetailPage = () => {
                   <span>Chính sách vận chuyển & Bảo hành</span>
                   <span className="text-base text-slate-400">{activeTab === 'shipping' ? '—' : '+'}</span>
                 </button>
-                <div className={`mt-3 space-y-3 overflow-hidden transition-all duration-300 ${activeTab === 'shipping' ? 'max-h-60' : 'max-h-0'}`}>
-                  <div className="bg-slate-50 rounded-lg p-3 space-y-2.5 text-slate-600 text-xs">
-                    <div className="flex items-start gap-2.5">
-                      <TruckIcon className="w-4 h-4 text-slate-800 mt-0.5" />
-                      <div>
-                        <p className="font-semibold text-slate-800">Giao hàng hỏa tốc trong 2h</p>
-                        <p className="mt-0.5">Hỗ trợ miễn phí vận chuyển lên đến 25k cho các đơn hàng từ 45k.</p>
+                <motion.div
+                  initial={false}
+                  animate={{
+                    height: activeTab === 'shipping' ? 'auto' : 0,
+                    opacity: activeTab === 'shipping' ? 1 : 0,
+                  }}
+                  transition={{ duration: 0.3, ease: 'easeInOut' }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-3 space-y-3">
+                    <div className="bg-slate-50 rounded-lg p-3 space-y-2.5 text-slate-600 text-xs">
+                      <div className="flex items-start gap-2.5">
+                        <TruckIcon className="w-4 h-4 text-slate-800 mt-0.5" />
+                        <div>
+                          <p className="font-semibold text-slate-800">Giao hàng hỏa tốc trong 2h</p>
+                          <p className="mt-0.5">Hỗ trợ miễn phí vận chuyển lên đến 25k cho các đơn hàng từ 45k.</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-start gap-2.5">
-                      <ShieldCheckIcon className="w-4 h-4 text-slate-800 mt-0.5" />
-                      <div>
-                        <p className="font-semibold text-slate-800">Bảo hành 12 tháng chính hãng</p>
-                        <p className="mt-0.5">Cam kết 100% chính hãng. Hoàn tiền 200% nếu phát hiện hàng giả.</p>
+                      <div className="flex items-start gap-2.5">
+                        <ShieldCheckIcon className="w-4 h-4 text-slate-800 mt-0.5" />
+                        <div>
+                          <p className="font-semibold text-slate-800">Bảo hành 12 tháng chính hãng</p>
+                          <p className="mt-0.5">Cam kết 100% chính hãng. Hoàn tiền 200% nếu phát hiện hàng giả.</p>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               </div>
             </div>
-          </div>
-
-        </div>
+          </motion.div>
+        </motion.div>
 
         {/* Reviews & Ratings Section */}
-        <div className="bg-white rounded-lg shadow-custom-smooth border border-slate-100 p-6 mt-12">
+        <motion.div
+          variants={fadeInUp}
+          className="bg-white rounded-lg shadow-custom-smooth border border-slate-100 p-6 mt-12"
+        >
           <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-4">
             <div className="w-1 h-6 bg-slate-900 rounded-full"></div>
             <h2 className="text-lg font-bold text-slate-900 font-display">Đánh giá từ khách hàng</h2>
@@ -526,9 +606,7 @@ const ProductDetailPage = () => {
             </div>
           ) : (
             <div className="space-y-8">
-              {/* Stats Summary Panel */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center bg-slate-50/50 p-6 rounded-xl border border-slate-100">
-                {/* Left Side: Average */}
                 <div className="md:col-span-4 text-center md:border-r md:border-slate-200/60 pb-6 md:pb-0">
                   <div className="text-5xl font-black text-slate-900 font-display">
                     {Number(reviewStats?.avg_rating || 0).toFixed(1)}
@@ -546,7 +624,6 @@ const ProductDetailPage = () => {
                   </p>
                 </div>
 
-                {/* Right Side: Star Bars */}
                 <div className="md:col-span-8 space-y-2.5">
                   {[5, 4, 3, 2, 1].map((stars) => {
                     const count = reviewStats?.rating_distribution?.[stars] || 0;
@@ -556,10 +633,13 @@ const ProductDetailPage = () => {
                       <div key={stars} className="flex items-center gap-3 text-xs">
                         <span className="w-12 text-slate-600 font-medium">{stars} sao</span>
                         <div className="flex-1 h-2 bg-slate-200/80 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-amber-400 rounded-full transition-all duration-500"
-                            style={{ width: `${percent}%` }}
-                          ></div>
+                          <motion.div
+                            className="h-full bg-amber-400 rounded-full"
+                            initial={{ width: 0 }}
+                            whileInView={{ width: `${percent}%` }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.8, delay: 0.1 }}
+                          />
                         </div>
                         <span className="w-8 text-right text-slate-400 font-mono">{percent}%</span>
                       </div>
@@ -568,10 +648,16 @@ const ProductDetailPage = () => {
                 </div>
               </div>
 
-              {/* Reviews List */}
               <div className="space-y-6 divide-y divide-slate-100">
                 {reviews.map((rev) => (
-                  <div key={rev.id} className="pt-6 first:pt-0">
+                  <motion.div
+                    key={rev.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.3 }}
+                    className="pt-6 first:pt-0"
+                  >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-sky-50 text-sky-600 border border-sky-100 flex items-center justify-center font-bold text-sm">
@@ -593,7 +679,6 @@ const ProductDetailPage = () => {
                       )}
                     </div>
 
-                    {/* Star Rating */}
                     <div className="flex items-center gap-0.5 mt-3">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <StarIcon
@@ -603,17 +688,11 @@ const ProductDetailPage = () => {
                       ))}
                     </div>
 
-                    {/* Title & Comment */}
                     {rev.title && (
-                      <h4 className="text-sm font-bold text-slate-950 mt-2.5">
-                        {rev.title}
-                      </h4>
+                      <h4 className="text-sm font-bold text-slate-950 mt-2.5">{rev.title}</h4>
                     )}
-                    <p className="text-slate-650 text-sm mt-1.5 leading-relaxed whitespace-pre-line">
-                      {rev.content}
-                    </p>
+                    <p className="text-slate-650 text-sm mt-1.5 leading-relaxed whitespace-pre-line">{rev.content}</p>
 
-                    {/* Replies */}
                     {rev.replies && rev.replies.length > 0 && (
                       <div className="mt-4 ml-6 pl-4 border-l-2 border-sky-400 space-y-3 bg-sky-50/30 p-3.5 rounded-lg border border-sky-100/50">
                         {rev.replies.map((reply) => (
@@ -623,30 +702,27 @@ const ProductDetailPage = () => {
                                 {reply.is_seller ? 'Phản hồi từ người bán' : 'Khách hàng'}
                               </span>
                               {reply.is_seller && (
-                                <span className="bg-sky-500 text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold">
-                                  QTV
-                                </span>
+                                <span className="bg-sky-500 text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold">QTV</span>
                               )}
-                              <span className="text-[10px] text-slate-400">
-                                {new Date(reply.created_at).toLocaleDateString('vi-VN')}
-                              </span>
+                              <span className="text-[10px] text-slate-400">{new Date(reply.created_at).toLocaleDateString('vi-VN')}</span>
                             </div>
-                            <p className="text-slate-700 mt-1 leading-relaxed whitespace-pre-line">
-                              {reply.content}
-                            </p>
+                            <p className="text-slate-700 mt-1 leading-relaxed whitespace-pre-line">{reply.content}</p>
                           </div>
                         ))}
                       </div>
                     )}
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             </div>
           )}
-        </div>
+        </motion.div>
 
-        {/* AI Recommendations - Similar Products */}
-        <div className="bg-white rounded-lg shadow-custom-smooth border border-slate-100 p-6 mt-12">
+        {/* AI Recommendations */}
+        <motion.div
+          variants={fadeInUp}
+          className="bg-white rounded-lg shadow-custom-smooth border border-slate-100 p-6 mt-12"
+        >
           <div className="flex items-center gap-2 mb-5">
             <div className="w-1 h-6 bg-slate-900 rounded-full"></div>
             <h2 className="text-lg font-bold text-slate-900 font-display">Sản phẩm tương tự</h2>
@@ -658,9 +734,9 @@ const ProductDetailPage = () => {
             title=""
             limit={6}
           />
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { analyticsService } from '../../services/aiService';
 import productService from '../../services/productService';
@@ -26,6 +27,36 @@ import {
   ExclamationTriangleIcon,
   ArrowPathIcon
 } from '@heroicons/react/24/outline';
+import { staggerContainer, staggerItem, fadeInUp } from '../../utils/animations';
+
+// CountUp component for KPI numbers
+const CountUp = ({ value, duration = 1.5, prefix = '', suffix = '' }) => {
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    let startTime = null;
+    const startVal = 0;
+    const endVal = value;
+
+    const animate = (timestamp) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / (duration * 1000), 1);
+      // Ease out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayValue(startVal + (endVal - startVal) * eased);
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }, [value, duration]);
+
+  if (typeof value === 'number' && !Number.isInteger(value)) {
+    return <span>{prefix}{displayValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{suffix}</span>;
+  }
+  return <span>{prefix}{Math.round(displayValue).toLocaleString()}{suffix}</span>;
+};
 
 const AdminDashboardPage = () => {
   const [loading, setLoading] = useState(false);
@@ -56,31 +87,25 @@ const AdminDashboardPage = () => {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch dashboard metrics
       const dashboardRes = await analyticsService.getDashboard(daysPeriod);
       const dashboardData = dashboardRes.data || {};
 
-      // 2. Fetch predictions
       const predictionsRes = await analyticsService.getPredictions(7);
       const predictionsData = predictionsRes.data || {};
 
-      // 3. Fetch customer segments
       const segmentsRes = await analyticsService.getCustomerSegments();
       const segmentsData = segmentsRes.data || {};
 
-      // 4. Fetch top products
       const topProductsRes = await analyticsService.getProductAnalytics(null, daysPeriod);
       const topProductsData = topProductsRes.data || {};
 
-      // 5. Fetch low stock products from product service
       const lowStockRes = await productService.getProducts({ page_size: 100 });
       const allProducts = lowStockRes.results || [];
       const lowStock = allProducts.filter(p => p.stock_quantity <= (p.low_stock_threshold || 5));
       setLowStockProducts(lowStock);
 
-      // Check if we need to load mock data because database is fresh (no revenue yet)
       const hasRealData = dashboardData.total_revenue > 0 || (dashboardData.sales_over_time && dashboardData.sales_over_time.length > 0);
-      
+
       if (!hasRealData) {
         loadMockData();
       } else {
@@ -93,7 +118,6 @@ const AdminDashboardPage = () => {
           order_growth: dashboardData.order_growth || 0
         });
 
-        // Format sales chart data (History + Prediction)
         const history = (dashboardData.sales_over_time || []).map(item => ({
           name: formatDate(item.date),
           'Doanh thu thực tế': parseFloat(item.revenue),
@@ -108,20 +132,18 @@ const AdminDashboardPage = () => {
 
         setSalesData([...history, ...predictions]);
 
-        // Customer segments
         const segments = Object.entries(segmentsData.segments || {}).map(([key, val]) => ({
           name: key.toUpperCase(),
           value: val
         }));
         setCustomerSegments(segments);
 
-        // Top products
         setTopProducts(topProductsData.products || []);
       }
 
     } catch (error) {
       console.error('Error loading dashboard:', error);
-      loadMockData(); // Fallback to mock data on error so UI is gorgeous
+      loadMockData();
     } finally {
       setLoading(false);
     }
@@ -137,7 +159,6 @@ const AdminDashboardPage = () => {
       order_growth: 8.6
     });
 
-    // 14 days of history + 7 days prediction mock
     const historyMock = Array.from({ length: 14 }).map((_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - (14 - i));
@@ -185,9 +206,14 @@ const AdminDashboardPage = () => {
   const COLORS = ['#818cf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa'];
 
   return (
-    <div className="space-y-6">
+    <motion.div
+      className="space-y-6"
+      variants={staggerContainer}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Header and Period Selector */}
-      <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800/80 shadow-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <motion.div variants={staggerItem} className="bg-slate-950 p-6 rounded-2xl border border-slate-800/80 shadow-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-white tracking-wide">
             Thống kê & Phân tích AI {isUsingMockData && <span className="text-xs bg-amber-950/40 border border-amber-900/40 text-amber-400 px-2.5 py-0.5 rounded-full font-bold ml-2">Dữ liệu Demo</span>}
@@ -204,23 +230,30 @@ const AdminDashboardPage = () => {
             <option value={30}>30 ngày qua</option>
             <option value={90}>90 ngày qua</option>
           </select>
-          <button 
+          <motion.button
             onClick={loadDashboardData}
             className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors focus:outline-none"
             title="Tải lại dữ liệu"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
           >
             <ArrowPathIcon className="w-4 h-4" />
-          </button>
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <motion.div
+        className="grid grid-cols-1 md:grid-cols-3 gap-6"
+        variants={staggerContainer}
+      >
         {/* Revenue KPI */}
-        <div className="bg-slate-950/60 border border-slate-800/70 p-6 rounded-2xl flex items-center justify-between shadow-lg">
+        <motion.div variants={staggerItem} className="bg-slate-950/60 border border-slate-800/70 p-6 rounded-2xl flex items-center justify-between shadow-lg">
           <div className="space-y-2">
             <span className="text-slate-500 text-xs font-semibold uppercase tracking-wider block">Doanh thu ({daysPeriod} ngày)</span>
-            <span className="text-3xl font-extrabold text-white block">${kpis.total_revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span className="text-3xl font-extrabold text-white block">
+              $<CountUp value={kpis.total_revenue} />
+            </span>
             <div className="flex items-center space-x-1.5">
               {kpis.revenue_growth >= 0 ? (
                 <>
@@ -236,16 +269,21 @@ const AdminDashboardPage = () => {
               <span className="text-slate-500 text-[10px] font-medium">so với chu kỳ trước</span>
             </div>
           </div>
-          <div className="w-12 h-12 bg-indigo-950/20 border border-indigo-900/30 rounded-xl flex items-center justify-center text-indigo-400">
+          <motion.div
+            className="w-12 h-12 bg-indigo-950/20 border border-indigo-900/30 rounded-xl flex items-center justify-center text-indigo-400"
+            whileHover={{ scale: 1.1, rotate: 5 }}
+          >
             <BanknotesIcon className="w-6 h-6" />
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
         {/* Orders KPI */}
-        <div className="bg-slate-950/60 border border-slate-800/70 p-6 rounded-2xl flex items-center justify-between shadow-lg">
+        <motion.div variants={staggerItem} className="bg-slate-950/60 border border-slate-800/70 p-6 rounded-2xl flex items-center justify-between shadow-lg">
           <div className="space-y-2">
             <span className="text-slate-500 text-xs font-semibold uppercase tracking-wider block">Đơn đặt hàng</span>
-            <span className="text-3xl font-extrabold text-white block">{kpis.total_orders.toLocaleString()} đơn</span>
+            <span className="text-3xl font-extrabold text-white block">
+              <CountUp value={kpis.total_orders} suffix=" đơn" />
+            </span>
             <div className="flex items-center space-x-1.5">
               {kpis.order_growth >= 0 ? (
                 <>
@@ -261,28 +299,39 @@ const AdminDashboardPage = () => {
               <span className="text-slate-500 text-[10px] font-medium">so với chu kỳ trước</span>
             </div>
           </div>
-          <div className="w-12 h-12 bg-emerald-950/20 border border-emerald-900/30 rounded-xl flex items-center justify-center text-emerald-400">
+          <motion.div
+            className="w-12 h-12 bg-emerald-950/20 border border-emerald-900/30 rounded-xl flex items-center justify-center text-emerald-400"
+            whileHover={{ scale: 1.1, rotate: 5 }}
+          >
             <ShoppingBagIcon className="w-6 h-6" />
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
         {/* Customers KPI */}
-        <div className="bg-slate-950/60 border border-slate-800/70 p-6 rounded-2xl flex items-center justify-between shadow-lg">
+        <motion.div variants={staggerItem} className="bg-slate-950/60 border border-slate-800/70 p-6 rounded-2xl flex items-center justify-between shadow-lg">
           <div className="space-y-2">
             <span className="text-slate-500 text-xs font-semibold uppercase tracking-wider block">Khách hàng mới</span>
-            <span className="text-3xl font-extrabold text-white block">+{kpis.new_customers}</span>
+            <span className="text-3xl font-extrabold text-white block">
+              +<CountUp value={kpis.new_customers} />
+            </span>
             <span className="text-slate-500 text-[10px] font-medium block">Tài khoản đăng ký mới hoạt động</span>
           </div>
-          <div className="w-12 h-12 bg-amber-950/20 border border-amber-900/30 rounded-xl flex items-center justify-center text-amber-400">
+          <motion.div
+            className="w-12 h-12 bg-amber-950/20 border border-amber-900/30 rounded-xl flex items-center justify-center text-amber-400"
+            whileHover={{ scale: 1.1, rotate: 5 }}
+          >
             <UsersIcon className="w-6 h-6" />
-          </div>
-        </div>
-      </div>
+          </motion.div>
+        </motion.div>
+      </motion.div>
 
       {/* Main Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <motion.div variants={staggerItem} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Sales Chart with Prediction (Spans 2 columns) */}
-        <div className="bg-slate-950 border border-slate-800/80 rounded-2xl p-6 shadow-xl lg:col-span-2 space-y-4">
+        <motion.div
+          className="bg-slate-950 border border-slate-800/80 rounded-2xl p-6 shadow-xl lg:col-span-2 space-y-4"
+          variants={fadeInUp}
+        >
           <div>
             <h3 className="text-sm font-bold text-white uppercase tracking-wider">Lịch sử doanh thu & Dự báo 7 ngày AI (Linear Regression)</h3>
             <p className="text-xs text-slate-500 mt-0.5">Biểu đồ thể hiện doanh thu thực tế hàng ngày kết hợp với thuật toán dự đoán tự động của AI.</p>
@@ -308,7 +357,7 @@ const AdminDashboardPage = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.3} />
                   <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} />
                   <YAxis stroke="#64748b" fontSize={10} tickLine={false} />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px' }}
                     labelStyle={{ color: '#94a3b8', fontSize: '11px', fontWeight: 'bold' }}
                     itemStyle={{ fontSize: '12px' }}
@@ -320,10 +369,13 @@ const AdminDashboardPage = () => {
               </ResponsiveContainer>
             )}
           </div>
-        </div>
+        </motion.div>
 
         {/* Customer Segments Chart (Spans 1 column) */}
-        <div className="bg-slate-950 border border-slate-800/80 rounded-2xl p-6 shadow-xl space-y-4 flex flex-col justify-between">
+        <motion.div
+          className="bg-slate-950 border border-slate-800/80 rounded-2xl p-6 shadow-xl space-y-4 flex flex-col justify-between"
+          variants={fadeInUp}
+        >
           <div>
             <h3 className="text-sm font-bold text-white uppercase tracking-wider">Phân khúc Khách hàng (RFM Analysis)</h3>
             <p className="text-xs text-slate-500 mt-0.5">Phân chia nhóm khách hàng dựa trên Tần suất (Frequency) và Giá trị mua hàng (Monetary).</p>
@@ -349,7 +401,7 @@ const AdminDashboardPage = () => {
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '12px' }}
                     itemStyle={{ color: '#fff', fontSize: '12px' }}
                   />
@@ -369,13 +421,16 @@ const AdminDashboardPage = () => {
               </div>
             ))}
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Low Stock and Top Products grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <motion.div variants={staggerItem} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Performing Products */}
-        <div className="bg-slate-950 border border-slate-800/80 rounded-2xl p-6 shadow-xl space-y-4">
+        <motion.div
+          className="bg-slate-950 border border-slate-800/80 rounded-2xl p-6 shadow-xl space-y-4"
+          variants={fadeInUp}
+        >
           <h3 className="text-sm font-bold text-white uppercase tracking-wider">Top sản phẩm bán chạy nhất</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
@@ -389,20 +444,29 @@ const AdminDashboardPage = () => {
               </thead>
               <tbody className="divide-y divide-slate-850">
                 {topProducts.slice(0, 5).map((prod, index) => (
-                  <tr key={index} className="text-slate-300">
+                  <motion.tr
+                    key={index}
+                    className="text-slate-300"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                  >
                     <td className="py-3 font-medium truncate max-w-[200px]">{prod.product_name || prod.product_id}</td>
                     <td className="py-3 text-center font-semibold text-slate-400">{prod.total_views || 0}</td>
                     <td className="py-3 text-center font-bold text-slate-200">{prod.total_purchases || 0}</td>
                     <td className="py-3 text-right font-bold text-white">${parseFloat(prod.total_revenue || 0).toFixed(2)}</td>
-                  </tr>
+                  </motion.tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+        </motion.div>
 
         {/* Low Stock Alerts */}
-        <div className="bg-slate-950 border border-slate-800/80 rounded-2xl p-6 shadow-xl space-y-4">
+        <motion.div
+          className="bg-slate-950 border border-slate-800/80 rounded-2xl p-6 shadow-xl space-y-4"
+          variants={fadeInUp}
+        >
           <div className="flex items-center space-x-2">
             <ExclamationTriangleIcon className="w-5 h-5 text-rose-500" />
             <h3 className="text-sm font-bold text-white uppercase tracking-wider">Cảnh báo tồn kho thấp</h3>
@@ -424,7 +488,13 @@ const AdminDashboardPage = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-850">
                   {lowStockProducts.slice(0, 5).map((prod) => (
-                    <tr key={prod.id} className="text-slate-300">
+                    <motion.tr
+                      key={prod.id}
+                      className="text-slate-300"
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
                       <td className="py-3 font-medium truncate max-w-[200px]">{prod.name}</td>
                       <td className="py-3 font-mono text-slate-500">{prod.sku}</td>
                       <td className="py-3 text-center">
@@ -433,15 +503,15 @@ const AdminDashboardPage = () => {
                         </span>
                       </td>
                       <td className="py-3 text-right font-bold text-rose-500">{prod.stock_quantity}</td>
-                    </tr>
+                    </motion.tr>
                   ))}
                 </tbody>
               </table>
             )}
           </div>
-        </div>
-      </div>
-    </div>
+        </motion.div>
+      </motion.div>
+    </motion.div>
   );
 };
 

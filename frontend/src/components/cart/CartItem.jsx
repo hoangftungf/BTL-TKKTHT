@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
+import { motion } from 'framer-motion';
 import { updateCartItem, removeCartItem } from '../../store/slices/cartSlice';
 import { MinusIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { formatPrice } from '../../utils/format';
@@ -35,7 +36,16 @@ const CartItem = ({ item, isSelected, onToggleSelect }) => {
   };
 
   return (
-    <div className="flex flex-col md:flex-row md:items-center bg-white px-6 py-5 gap-4 hover:bg-gray-50/40 border-b border-gray-100 transition-colors duration-150">
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: 50, height: 0, paddingTop: 0, paddingBottom: 0 }}
+      transition={{ duration: 0.25 }}
+      className={`flex flex-col md:flex-row md:items-center bg-white px-6 py-5 gap-4 border-b border-gray-100 transition-colors duration-150 ${
+        !isSelected ? 'opacity-60' : 'hover:bg-gray-50/40'
+      }`}
+    >
       {/* Checkbox & Product Column */}
       <div className="flex items-center space-x-3.5 flex-grow basis-[45%] min-w-0">
         <input
@@ -44,7 +54,7 @@ const CartItem = ({ item, isSelected, onToggleSelect }) => {
           onChange={onToggleSelect}
           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer accent-blue-600"
         />
-        
+
         <div className="flex items-center space-x-4 flex-grow min-w-0">
           {/* Image */}
           <Link to={`/products/${item.product_id}`} className="w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-gray-50 border border-gray-150 block hover:opacity-95 transition-opacity relative group">
@@ -58,15 +68,15 @@ const CartItem = ({ item, isSelected, onToggleSelect }) => {
               }}
             />
           </Link>
-          
+
           {/* Name & Badges */}
-          <div className="flex-grow min-w-0 flex flex-col justify-between py-0.5">
+          <div className={`flex-grow min-w-0 flex flex-col justify-between py-0.5 ${!isSelected ? 'line-through decoration-gray-400' : ''}`}>
             <Link to={`/products/${item.product_id}`} className="hover:text-blue-600 transition-colors">
               <h4 className="font-semibold text-gray-900 text-sm line-clamp-2 leading-relaxed">
                 {item.product_name}
               </h4>
             </Link>
-            
+
             <div className="flex flex-wrap gap-1.5 mt-2">
               <span className="bg-blue-50 text-blue-600 text-[9.5px] font-bold px-1.5 py-0.5 rounded border border-blue-100">
                 Yêu thích
@@ -86,8 +96,8 @@ const CartItem = ({ item, isSelected, onToggleSelect }) => {
             <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold md:text-center block">Phân loại</span>
             <div className="flex flex-wrap md:justify-center gap-1">
               {Object.entries(item.variant_info.attributes).map(([key, val]) => (
-                <span 
-                  key={key} 
+                <span
+                  key={key}
                   className="bg-gray-50 text-gray-700 px-2 py-0.5 rounded border border-gray-200 text-[10.5px] font-medium"
                   title={`${getAttributeLabel(key)}: ${val}`}
                 >
@@ -116,41 +126,59 @@ const CartItem = ({ item, isSelected, onToggleSelect }) => {
       <div className="w-full md:w-[12%] flex-shrink-0 flex md:justify-center items-center justify-between">
         <span className="md:hidden text-xs text-gray-400 font-medium">Số Lượng:</span>
         <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden h-8 bg-white shadow-sm">
-          <button
+          <motion.button
             onClick={() => handleQuantityChange(item.quantity - 1)}
             disabled={item.quantity <= 1}
             className="w-7 h-full hover:bg-gray-100 disabled:opacity-40 flex items-center justify-center border-r border-gray-200 transition-colors"
+            whileTap={{ scale: 0.85 }}
           >
             <MinusIcon className="w-3.5 h-3.5 text-gray-600" />
-          </button>
-          <span className="w-9 text-center text-xs font-bold text-gray-800">{item.quantity}</span>
-          <button
+          </motion.button>
+          <motion.span
+            key={item.quantity}
+            initial={{ scale: 1.3, y: -2 }}
+            animate={{ scale: 1, y: 0 }}
+            className="w-9 text-center text-xs font-bold text-gray-800"
+          >
+            {item.quantity}
+          </motion.span>
+          <motion.button
             onClick={() => handleQuantityChange(item.quantity + 1)}
             className="w-7 h-full hover:bg-gray-100 flex items-center justify-center border-l border-gray-200 transition-colors"
+            whileTap={{ scale: 0.85 }}
           >
             <PlusIcon className="w-3.5 h-3.5 text-gray-600" />
-          </button>
+          </motion.button>
         </div>
       </div>
 
       {/* Subtotal Column */}
       <div className="w-full md:w-[12%] flex-shrink-0 text-right md:text-center flex md:justify-center justify-between items-center">
         <span className="md:hidden text-xs text-gray-400 font-medium">Số Tiền:</span>
-        <span className="font-bold text-blue-600 text-[14.5px]">{formatPrice(item.subtotal)}</span>
+        <motion.span
+          key={item.subtotal}
+          initial={{ scale: 1.1, color: '#2563eb' }}
+          animate={{ scale: 1, color: '#2563eb' }}
+          className="font-bold text-blue-600 text-[14.5px]"
+        >
+          {formatPrice(item.subtotal)}
+        </motion.span>
       </div>
 
       {/* Actions Column */}
       <div className="w-full md:w-[8%] flex-shrink-0 text-right md:text-center flex md:flex-col justify-between md:justify-center items-end md:items-center">
         <span className="md:hidden text-xs text-gray-400 font-medium">Thao Tác:</span>
-        <button
+        <motion.button
           onClick={handleRemove}
           className="text-gray-400 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50 transition-all duration-150"
           title="Xóa sản phẩm"
+          whileHover={{ scale: 1.15 }}
+          whileTap={{ scale: 0.9 }}
         >
           <TrashIcon className="w-5 h-5" />
-        </button>
+        </motion.button>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

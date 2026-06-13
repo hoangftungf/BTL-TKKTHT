@@ -1,11 +1,34 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { recommendationService } from '../../services/aiService';
 import ProductCard from './ProductCard';
+import { staggerContainer, staggerItem } from '../../utils/animations';
+
+const SkeletonShimmer = () => (
+  <div className="space-y-4">
+    <div className="h-6 bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 rounded w-48 mb-4"
+      style={{ backgroundSize: '200% 100%', animation: 'shimmer 1.5s ease-in-out infinite' }}
+    />
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      {[...Array(6)].map((_, idx) => (
+        <div key={idx} className="animate-pulse">
+          <motion.div
+            className="bg-gray-200 aspect-square rounded-lg mb-2"
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ repeat: Infinity, duration: 1.5, delay: idx * 0.1 }}
+          />
+          <div className="bg-gray-200 h-4 rounded mb-1"></div>
+          <div className="bg-gray-200 h-4 w-2/3 rounded"></div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 const ProductRecommendations = ({
   productId = null,
   userId = null,
-  type = 'similar', // 'similar', 'personalized', 'trending', 'bought_together'
+  type = 'similar',
   title = 'Sản phẩm gợi ý',
   limit = 6
 }) => {
@@ -13,7 +36,6 @@ const ProductRecommendations = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Dùng ref để theo dõi mount state, tránh setState sau khi unmount
   const isMountedRef = useRef(true);
 
   useEffect(() => {
@@ -55,7 +77,6 @@ const ProductRecommendations = ({
         const data = response.data;
         const productList = data.products || data.recommendations || data.results || data.trending || [];
 
-        // Chỉ cập nhật state nếu component vẫn còn mounted
         if (isMountedRef.current) {
           setProducts(productList);
         }
@@ -81,20 +102,7 @@ const ProductRecommendations = ({
   }, [productId, userId, type, limit]);
 
   if (loading) {
-    return (
-      <div className="py-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {[...Array(limit)].map((_, idx) => (
-            <div key={idx} className="animate-pulse">
-              <div className="bg-gray-200 aspect-square rounded-lg mb-2"></div>
-              <div className="bg-gray-200 h-4 rounded mb-1"></div>
-              <div className="bg-gray-200 h-4 w-2/3 rounded"></div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
+    return <SkeletonShimmer />;
   }
 
   if (error || products.length === 0) {
@@ -102,25 +110,32 @@ const ProductRecommendations = ({
   }
 
   return (
-    <div className="py-2">
+    <motion.div
+      className="py-2"
+      variants={staggerContainer}
+      initial="hidden"
+      animate="visible"
+    >
       {title && (
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <motion.div
+        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
+        variants={staggerContainer}
+      >
         {products.slice(0, limit).map((product, idx) => {
           const pid = product.product_id || product.id || (product.product || product.data || product).id;
           return (
-            <ProductCard
-              key={pid ?? idx}
-              product={product}
-            />
+            <motion.div key={pid ?? idx} variants={staggerItem}>
+              <ProductCard product={product} />
+            </motion.div>
           );
         })}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 

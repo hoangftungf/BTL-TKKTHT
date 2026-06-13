@@ -1,20 +1,32 @@
 import React from 'react';
 import { Carousel } from 'antd';
-import { 
-  Truck, 
-  Ticket, 
-  Globe, 
-  Flame, 
-  Store, 
-  TrendingUp, 
-  BadgePercent, 
+import { useRef } from 'react';
+import { motion, useScroll, useTransform } from 'framer-motion';
+import {
+  Truck,
+  Ticket,
+  Globe,
+  Flame,
+  Store,
+  TrendingUp,
+  BadgePercent,
   ShieldCheck,
   Gamepad2,
   Award
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { staggerContainer, staggerItem, scaleInBounce } from '../../utils/animations';
 
 const HeroSection = () => {
+  const sectionRef = useRef(null);
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ['start start', 'end start'],
+  });
+
+  const bannerY = useTransform(scrollYProgress, [0, 1], [0, 60]);
+  const bannerOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0.6]);
+
   const banners = [
     {
       id: 1,
@@ -104,43 +116,62 @@ const HeroSection = () => {
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Banner Carousel */}
-      <div className="w-full rounded-xl overflow-hidden shadow-sm border border-gray-100">
+    <div ref={sectionRef} className="space-y-6">
+      {/* Banner Carousel with parallax */}
+      <motion.div
+        className="w-full rounded-xl overflow-hidden shadow-sm border border-gray-100"
+        style={{ y: bannerY, opacity: bannerOpacity }}
+      >
         <Carousel autoplay effect="fade" dotPosition="bottom">
           {banners.map((banner) => (
             <div key={banner.id} className="relative aspect-[21/9] md:aspect-[24/8] w-full">
               <Link to={banner.link} className="block w-full h-full">
-                <img
+                <motion.img
                   src={banner.image}
                   alt={banner.title}
                   className="w-full h-full object-cover"
+                  whileHover={{ scale: 1.03 }}
+                  transition={{ duration: 6 }}
                 />
               </Link>
             </div>
           ))}
         </Carousel>
-      </div>
+      </motion.div>
 
-      {/* Quick Links Grid */}
-      <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+      {/* Quick Links Grid with stagger animation */}
+      <motion.div
+        className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm"
+        variants={staggerContainer}
+        initial="hidden"
+        animate="visible"
+      >
         <div className="grid grid-cols-5 md:grid-cols-10 gap-4">
-          {quickLinks.map((item) => (
-            <Link
+          {quickLinks.map((item, index) => (
+            <motion.div
               key={item.id}
-              to={item.link}
-              className="flex flex-col items-center group cursor-pointer"
+              variants={staggerItem}
+              custom={index}
             >
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm ${item.bgColor} group-hover:scale-110 group-hover:shadow-md`}>
-                {item.icon}
-              </div>
-              <span className="text-[11px] text-gray-700 font-medium text-center mt-2 group-hover:text-blue-600 transition-colors line-clamp-2 leading-tight max-w-[70px]">
-                {item.label}
-              </span>
-            </Link>
+              <Link
+                to={item.link}
+                className="flex flex-col items-center group cursor-pointer"
+              >
+                <motion.div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm ${item.bgColor}`}
+                  whileHover={{ scale: 1.15, rotate: 5 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  {item.icon}
+                </motion.div>
+                <span className="text-[11px] text-gray-700 font-medium text-center mt-2 group-hover:text-blue-600 transition-colors line-clamp-2 leading-tight max-w-[70px]">
+                  {item.label}
+                </span>
+              </Link>
+            </motion.div>
           ))}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };
